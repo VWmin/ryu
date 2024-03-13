@@ -102,6 +102,7 @@ class GUIServerApp(app_manager.RyuApp):
         self.is_active = True
         self.controller_id = self.CONF.controller_id
         self.topo_file = f"topo-{self.controller_id}.json"
+        self.hw_addr_to_sw_port = {}  # hw_addr(str) -> sw-port(str)
 
     @set_ev_cls(ofp_event.EventOFPErrorMsg, [HANDSHAKE_DISPATCHER, CONFIG_DISPATCHER, MAIN_DISPATCHER])
     def error_msg_handler(self, ev):
@@ -358,6 +359,7 @@ class GUIServerApp(app_manager.RyuApp):
                                  "state": port_data.state}
                     if temp_port not in self.global_topo["ports"]:
                         self.global_topo["ports"].append(temp_port)
+                        self.hw_addr_to_sw_port[temp_port["hw_addr"]] = f"{temp_port['dp_id']}-{temp_port['port_no']}"
             time.sleep(0)
 
     def sub_link_threading(self):
@@ -387,6 +389,15 @@ class GUIServerApp(app_manager.RyuApp):
                                  "ipv6": str(host_data.ipv6, encoding="utf-8")}
                     if temp_host not in self.global_topo["hosts"]:
                         self.global_topo["hosts"].append(temp_host)
+                        if temp_host["mac"] in self.hw_addr_to_sw_port:
+                            dpid = int(self.hw_addr_to_sw_port[temp_host["mac"]].split('-')[0])
+                            port = int(self.hw_addr_to_sw_port[temp_host["mac"]].split('-')[1])
+                            link = {"src_dp_id": dpid, "src_port_no": port,
+                                    "dst_dp_id": temp_host["dp_id"], "dst_port_no": temp_host["port_no"]}
+                            rev_link = {"dst_dp_id": dpid, "dst_port_no": port,
+                                        "src_dp_id": temp_host["dp_id"], "src_port_no": temp_host["port_no"]}
+                            self.global_topo['links'].append(link)
+                            self.global_topo['links'].append(rev_link)
             time.sleep(0)
 
     @handler.set_ev_cls(event.EventSwitchEnter)
@@ -507,7 +518,6 @@ class GUIServerApp(app_manager.RyuApp):
         print("host delete")
         # print(ev.host)
         # self.lib.publishHost(ev.host.port.dpid, ev.host.port.port_no, mac, ipv4, ipv6, False)
-
 
 
 # with open(self.topo_file, 'w', encoding='UTF-8') as fp:
