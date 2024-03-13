@@ -3,14 +3,11 @@
 
 import sys
 
-from ryu import cfg
 from ryu.cmd import manager
-
-cfg.CONF.register_cli_opts([cfg.IntOpt('controller-id', default=1, help='distribution controller id (default %s)' % 1), ])
 
 
 def main():
-    sys.argv.append('/home/fwy/ryu/ryu/app/distribution/controller.py')
+    sys.argv.append('/home/fwy/ryu/ryu/app/distribution/controller_dds.py')
     # sys.argv.append('--verbose')
     sys.argv.append('--enable-debugger')
     sys.argv.append('--observe-links')

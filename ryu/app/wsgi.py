@@ -36,6 +36,7 @@ from ryu.lib import hub
 
 DEFAULT_WSGI_HOST = '0.0.0.0'
 DEFAULT_WSGI_PORT = 8080
+DEFAULT_CONTROLLER_ID = 0
 
 CONF = cfg.CONF
 CONF.register_cli_opts([
@@ -45,6 +46,9 @@ CONF.register_cli_opts([
     cfg.IntOpt(
         'wsapi-port', default=DEFAULT_WSGI_PORT,
         help='webapp listen port (default %s)' % DEFAULT_WSGI_PORT),
+    cfg.IntOpt(
+        'controller-id', default=DEFAULT_CONTROLLER_ID,
+        help='distribution controller id (default %s)' % DEFAULT_CONTROLLER_ID),
 ])
 
 HEX_PATTERN = r'0x[0-9a-z]+'

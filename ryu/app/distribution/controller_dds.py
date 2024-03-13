@@ -1,4 +1,3 @@
-import argparse
 import ctypes
 import json
 import logging
@@ -65,7 +64,7 @@ class GUIServerApp(app_manager.RyuApp):
     def __init__(self, *args, **kwargs):
         super(GUIServerApp, self).__init__(*args, **kwargs)
         wsgi = kwargs['wsgi']
-        wsgi.register(GUIServerController)
+        wsgi.register(GUIServerController, {'dds_app': self})
         # mine
         self.mac_to_port = {}
         self.arp_received = {}
@@ -237,19 +236,20 @@ class GUIServerApp(app_manager.RyuApp):
                 actions = [parser.OFPActionOutput(out_port)]
                 self.send_packet_out(datapath, msg, actions)
 
+    # subscribe to controller exit
+    # TODO clear related sw, link, host
     def sub_writer(self):
         while 1:
             w = self.lib.getMatchedChange()
             str1 = '.'.join(str(i) for i in w.writer_info)
+            print(f"writer info: {list(w.writer_info)}")
             for i in range(len(self.global_topo["controllers"])):
                 if self.global_topo["controllers"][i]["identify"] == str1:
                     self.global_topo["controllers"][i]["is_live"] = False
-                    with open(self.topo_file, 'w', encoding='UTF-8') as fp:
-                        fp.write(json.dumps(self.global_topo, indent=2, ensure_ascii=False))
                     print("A controller exit.")
             time.sleep(10)
 
-    # send all local topo
+    # publish all local topo for new connected controller
     def pub_topo(self):
         swes = get_switch(self)
         for sw in swes:
@@ -271,58 +271,48 @@ class GUIServerApp(app_manager.RyuApp):
             ipv6 = bytes(','.join(host.ipv6), encoding='utf-8')
             self.lib.publishHost(host.port.dpid, host.port.port_no, mac, ipv4, ipv6, True)
 
+    # new data reader event from dds
     def new_controller_enter_threading(self):
         while 1:
             new = self.lib.matchNewSubscription()
             if new:
                 self.pub_topo()
+                print("new controller enter")
             time.sleep(1)
 
+    # subscribe switches
     def sub_switch_threading(self):
         while 1:
             switch_data = self.lib.subscribeSwitchInfo()
             sub_time = time.time()
             if switch_data.switch_info.controller_id != 0:
+                # sw enter
                 if switch_data.switch_info.operation:
                     identify = '.'.join(str(i) for i in switch_data.writer_info)
-                    temp_controller = {"identify": identify, "c_id": switch_data.switch_info.controller_id,
+                    print(f"writer info: {list(switch_data.writer_info)}")
+                    temp_controller = {"identify": identify,
+                                       "c_id": switch_data.switch_info.controller_id,
                                        "is_live": True}
                     if temp_controller not in self.global_topo["controllers"]:
                         self.global_topo["controllers"].append(temp_controller)
                     temp_switch = {"c_id": switch_data.switch_info.controller_id,
-                                   "dp_id": switch_data.switch_info.dp_id, "port_num": switch_data.switch_info.port_num}
+                                   "dp_id": switch_data.switch_info.dp_id,
+                                   "port_num": switch_data.switch_info.port_num}
                     # temp_switch={"c_id":switch_data.switch_info.controller_id, "dp_id":switch_data.switch_info.dp_id}
                     if temp_switch not in self.global_topo["switches"]:
                         self.global_topo["switches"].append(temp_switch)
-                        with open(self.topo_file, 'w', encoding='UTF-8') as fp:
-                            fp.write(json.dumps(self.global_topo, indent=2, ensure_ascii=False))
-                        update_time = time.time()
-                        self.sub_time_info["switches"].append(sub_time)
-                        self.update_time_info["switches"].append(update_time)
-                        # self.logger.info("switch_sub_time: %s", sub_time)
-                        # self.logger.info("switch_update_time: %s", update_time)
-
+                # sw leave
                 else:
                     for i in range(len(self.global_topo["switches"])):
                         if switch_data.switch_info.dp_id == self.global_topo["switches"][i]["dp_id"]:
                             del self.global_topo["switches"][i]
                             break
-
                     for port in reversed(self.global_topo["ports"]):
                         if switch_data.switch_info.dp_id == port["dp_id"]:
                             self.global_topo["ports"].remove(port)
                     for host in reversed(self.global_topo["hosts"]):
                         if switch_data.switch_info.dp_id == host["dp_id"]:
                             self.global_topo["ports"].remove(host)
-
-                    with open(self.topo_file, 'w', encoding='UTF-8') as fp:
-                        fp.write(json.dumps(self.global_topo, indent=2, ensure_ascii=False))
-                    update_time = time.time()
-                    self.sub_time_info["switches"].append(sub_time)
-                    self.update_time_info["switches"].append(update_time)
-                    # self.logger.info("switch_sub_time: %s", sub_time)
-                    # self.logger.info("switch_update_time: %s", update_time)
-
             time.sleep(0)
 
     def sub_port_threading(self):
@@ -337,51 +327,34 @@ class GUIServerApp(app_manager.RyuApp):
                                  "ofproto": str(port_data.ofproto, encoding="utf-8"), "config": port_data.config,
                                  "state": port_data.state}
                     for i in range(len(self.global_topo["ports"])):
-                        if self.global_topo["ports"][i]["dp_id"] == temp_port["dp_id"] and self.global_topo["ports"][i][
-                            "port_no"] == temp_port["port_no"]:
+                        if self.global_topo["ports"][i]["dp_id"] == temp_port["dp_id"] and self.global_topo["ports"][i]["port_no"] == temp_port["port_no"]:
                             self.global_topo["ports"][i] = temp_port
-                            with open(self.topo_file, 'w', encoding='UTF-8') as fp:
-                                fp.write(json.dumps(self.global_topo, indent=2, ensure_ascii=False))
-                            update_time = time.time()
-                            self.sub_time_info["ports"].append(sub_time)
-                            self.update_time_info["ports"].append(update_time)
                             break
 
                 elif port_data.operation == 0:
                     for i in range(len(self.global_topo["ports"])):
-                        if self.global_topo["ports"][i]["dp_id"] == port_data.dp_id and self.global_topo["ports"][i][
-                            "port_no"] == port_data.port_no:
+                        if self.global_topo["ports"][i]["dp_id"] == port_data.dp_id and self.global_topo["ports"][i]["port_no"] == port_data.port_no:
                             del self.global_topo["ports"][i]
                             break
                     for j in range(len(self.global_topo["switches"])):
                         if self.global_topo["switches"][j]["dp_id"] == port_data.dp_id:
-                            self.global_topo["switches"][j]["port_num"] = self.global_topo["switches"][j][
-                                                                              "port_num"] - 1
+                            self.global_topo["switches"][j]["port_num"] = self.global_topo["switches"][j]["port_num"] - 1
                             break
                     for host in self.global_topo["hosts"]:
                         if port_data.dp_id == host["dp_id"] and port_data.port_no == host["port_no"]:
                             self.global_topo["hosts"].remove(host)
                             break
-                    with open(self.topo_file, 'w', encoding='UTF-8') as fp:
-                        fp.write(json.dumps(self.global_topo, indent=2, ensure_ascii=False))
-                    update_time = time.time()
-                    self.sub_time_info["ports"].append(sub_time)
-                    self.update_time_info["ports"].append(update_time)
-
                 elif port_data.operation == 1:
-                    temp_port = {"dp_id": port_data.dp_id, "port_no": port_data.port_no,
+                    temp_port = {"dp_id": port_data.dp_id,
+                                 "port_no": port_data.port_no,
                                  "hw_addr": str(port_data.hw_addr, encoding="utf-8"),
-                                 "name": str(port_data.name, encoding="utf-8"), "is_live": port_data.is_live,
-                                 "ofproto": str(port_data.ofproto, encoding="utf-8"), "config": port_data.config,
+                                 "name": str(port_data.name, encoding="utf-8"),
+                                 "is_live": port_data.is_live,
+                                 "ofproto": str(port_data.ofproto, encoding="utf-8"),
+                                 "config": port_data.config,
                                  "state": port_data.state}
                     if temp_port not in self.global_topo["ports"]:
                         self.global_topo["ports"].append(temp_port)
-                        with open(self.topo_file, 'w', encoding='UTF-8') as fp:
-                            fp.write(json.dumps(self.global_topo, indent=2, ensure_ascii=False))
-                        update_time = time.time()
-                        self.sub_time_info["ports"].append(sub_time)
-                        self.update_time_info["ports"].append(update_time)
-
             time.sleep(0)
 
     def sub_link_threading(self):
@@ -392,21 +365,10 @@ class GUIServerApp(app_manager.RyuApp):
                 temp_link = {"src_dp_id": link_data.src_dp_id, "src_port_no": link_data.src_port_no,
                              "dst_dp_id": link_data.dst_dp_id, "dst_port_no": link_data.dst_port_no}
                 if link_data.operation:
-                    # temp_link={"src_dp_id":link_data.src_dp_id,"src_port_no":link_data.src_port_no,"dst_dp_id":link_data.dst_dp_id,"dst_port_no":link_data.dst_port_no}
                     if temp_link not in self.global_topo["links"]:
                         self.global_topo["links"].append(temp_link)
-                        with open(self.topo_file, 'w', encoding='UTF-8') as fp:
-                            fp.write(json.dumps(self.global_topo, indent=2, ensure_ascii=False))
-                        update_time = time.time()
-                        self.sub_time_info["links"].append(sub_time)
-                        self.update_time_info["links"].append(update_time)
                 else:
                     self.global_topo["links"].remove(temp_link)
-                    with open(self.topo_file, 'w', encoding='UTF-8') as fp:
-                        fp.write(json.dumps(self.global_topo, indent=2, ensure_ascii=False))
-                    update_time = time.time()
-                    self.sub_time_info["links"].append(sub_time)
-                    self.update_time_info["links"].append(update_time)
             time.sleep(0)
 
     def sub_host_threading(self):
@@ -415,17 +377,13 @@ class GUIServerApp(app_manager.RyuApp):
             sub_time = time.time()
             if host_data.dp_id != 0:
                 if host_data.operation:
-                    temp_host = {"dp_id": host_data.dp_id, "port_no": host_data.port_no,
+                    temp_host = {"dp_id": host_data.dp_id,
+                                 "port_no": host_data.port_no,
                                  "mac": str(host_data.mac, encoding="utf-8"),
                                  "ipv4": str(host_data.ipv4, encoding="utf-8"),
                                  "ipv6": str(host_data.ipv6, encoding="utf-8")}
                     if temp_host not in self.global_topo["hosts"]:
                         self.global_topo["hosts"].append(temp_host)
-                        with open(self.topo_file, 'w', encoding='UTF-8') as fp:
-                            fp.write(json.dumps(self.global_topo, indent=2, ensure_ascii=False))
-                        update_time = time.time()
-                        self.sub_time_info["hosts"].append(sub_time)
-                        self.update_time_info["hosts"].append(update_time)
             time.sleep(0)
 
     @handler.set_ev_cls(event.EventSwitchEnter)
@@ -547,19 +505,15 @@ class GUIServerApp(app_manager.RyuApp):
         # print(ev.host)
         # self.lib.publishHost(ev.host.port.dpid, ev.host.port.port_no, mac, ipv4, ipv6, False)
 
-    @handler.set_ev_cls(event.EventSwitchReply)
-    def switch_reply_handler(self, reply):
-        LOG.debug('switch_reply async %s', reply)
-        if len(reply.switches) > 0:
-            for sw in reply.switches:
-                LOG.debug('  %s', sw)
 
-    @handler.set_ev_cls(event.EventLinkReply)
-    def link_reply_handler(self, reply):
-        LOG.debug('link_reply async %s', reply)
-        if len(reply.links) > 0:
-            for link in reply.links:
-                LOG.debug('  %s', link)
+
+# with open(self.topo_file, 'w', encoding='UTF-8') as fp:
+#     fp.write(json.dumps(self.global_topo, indent=2, ensure_ascii=False))
+# update_time = time.time()
+# self.sub_time_info["switches"].append(sub_time)
+# self.update_time_info["switches"].append(update_time)
+# self.logger.info("switch_sub_time: %s", sub_time)
+# self.logger.info("switch_update_time: %s", update_time)
 
 
 app_manager.require_app('ryu.app.rest_topology')

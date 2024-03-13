@@ -11,15 +11,15 @@ var CONF = {
     }
 };
 
-var ws = new WebSocket("ws://" + location.host + "/v1.0/topology/ws");
-ws.onmessage = function(event) {
-    var data = JSON.parse(event.data);
-
-    var result = rpc[data.method](data.params);
-
-    var ret = {"id": data.id, "jsonrpc": "2.0", "result": result};
-    this.send(JSON.stringify(ret));
-}
+// var ws = new WebSocket("ws://" + location.host + "/v1.0/topology/ws");
+// ws.onmessage = function(event) {
+//     var data = JSON.parse(event.data);
+//
+//     var result = rpc[data.method](data.params);
+//
+//     var ret = {"id": data.id, "jsonrpc": "2.0", "result": result};
+//     this.send(JSON.stringify(ret));
+// }
 
 function trim_zero(obj) {
     return String(obj).replace(/^0+/, "");
