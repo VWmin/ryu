@@ -523,6 +523,7 @@ class Switches(app_manager.RyuApp):
         self.links = LinkState()      # Link class -> timestamp
         self.hosts = HostState()      # mac address -> Host class list
         self.is_active = True
+        self.link_delay = {}  # Link class -> seconds
 
         self.link_discovery = self.CONF.observe_links
         if self.link_discovery:
@@ -825,6 +826,11 @@ class Switches(app_manager.RyuApp):
         if not self.links.update_link(src, dst):
             # reverse link is not detected yet.
             # So schedule the check early because it's very likely it's up
+            costtime = self.links[link] - self.ports[src].timestamp
+            assert costtime > 0
+            if dst.dpid < src.dpid:
+                link = Link(dst, src)
+            self.link_delay[link] = costtime
             self.ports.move_front(dst)
             self.lldp_event.set()
         if self.explicit_drop:

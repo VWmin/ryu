@@ -1,0 +1,164 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+	<meta charset="UTF-8" />
+	<title>Global Network Topo</title>
+</head>
+
+<body>
+	<div id="divId" style="height: 1000px;width: 1700px;border: 1px solid grey"></div>
+	<script type="text/javascript" src="jquery.min.js"></script>
+	<script type="text/javascript">
+
+		a = $.ajax({
+			url:  "../topo-1.json",//json文件位置，文件名
+			type:  "GET",//请求方式为get
+			dataType:  "json", //返回数据格式为json
+			async:  false,
+			success:  function (data) {//请求成功完成后要执行的方法 
+			}
+		});
+		result = $.parseJSON(a["responseText"])
+	</script>
+	<script type="module">
+		import { Stage, Layer, Node, Link, Tooltip } from './jtopo-1.4.6_trial-esm-min.js';
+
+		var stage = new Stage('divId');
+		var layer = new Layer('default');
+		stage.addChild(layer);
+		//console.log(result["hosts"])
+
+		var links = [];
+		var switchNodes = [];
+		var controllerNodes = [];
+		var hostNodes = [];
+		//添加controller节点
+		for (var i in result["controllers"]) {
+			var controllerId = result["controllers"][i]["c_id"]
+			var controllerNode = new Node("c" + controllerId, 200 + i * 400, 200, 40, 40);
+			if (result["controllers"][i]["is_live"]) {
+				controllerNode.setImage("./controller-true.png")
+			}
+			else {
+				controllerNode.setImage("./controller-false.png")
+			}
+			//controllerNode.css('background', 'orange');
+			controllerNode.userData = []
+			controllerNode.userData.push(controllerId)
+			var ip="";
+			var n=0;
+			for (var k in result["controllers"][i]["identify"]){
+				if(result["controllers"][i]["identify"][k]=="."){
+					n++;
+				}
+				if(n>=4){
+					break;
+				}
+				ip=ip+result["controllers"][i]["identify"][k]
+			}
+			var str = "c_id: " + result["controllers"][i]["c_id"] + "<br />is_live: " + result["controllers"][i]["is_live"]+"<br />ip: "+ip
+			controllerNode.userData.push(str)
+			layer.addChild(controllerNode)
+			controllerNodes.push(controllerNode)
+
+			controllerNodes[i].on('mouseenter', function (event) {
+				var tooltip = new Tooltip(stage);
+				tooltip.setHtml(this.userData[1])
+				var eventDetails = event.details;
+				tooltip.showAt(eventDetails.x, eventDetails.y);
+			});
+
+		}
+		for (var i in result["switches"]) {
+			var switchId = result["switches"][i]["dp_id"]
+			var switchNode = new Node("s" + switchId, 100 + i * 200, 300, 50, 30);
+			switchNode.userData=[]
+			switchNode.userData.push(switchId)
+			var str = "c_id: " + result["switches"][i]["c_id"] + "<br />dp_id: " + result["switches"][i]["dp_id"]+"<br />port_num: "+result["switches"][i]["port_num"]
+			switchNode.userData.push(str)
+			switchNode.setImage("./switch.png")
+			switchNode.css('background', 'blue')
+			switchNodes.push(switchNode)
+			layer.addChild(switchNode)
+			for (var j in controllerNodes) {
+				if (controllerNodes[j].userData[0] == result["switches"][i]["c_id"]) {
+					link = new Link("", controllerNodes[j], switchNode)
+					link.css({
+						border:  '2px solid green',
+						lineDash:  [6, 2]
+					});
+					links.push(link)
+					layer.addChild(link)
+					break
+				}
+			}
+			switchNodes[i].on('mouseenter', function (event) {
+				var tooltip = new Tooltip(stage);
+				tooltip.setHtml(this.userData[1])
+				var eventDetails = event.details;
+				tooltip.showAt(eventDetails.x, eventDetails.y);
+			});
+		}
+		for (var i in result["hosts"]) {
+			var hostId = result["hosts"][i]["mac"]
+			var hostNode = new Node(hostId, 50 + i * 100, 400, 40, 30);
+			hostNode.setImage("./host.png")
+			//hostNode.css('background', 'green');
+			
+			hostNode.userData="dp_id: "+result["hosts"][i]["dp_id"]+"<br />"+"port_no: "+result["hosts"][i]["port_no"]+"<br />mac: "+result["hosts"][i]["mac"]
+			layer.addChild(hostNode)
+			hostNodes.push(hostNode)
+			for (var j in switchNodes) {
+				if (switchNodes[j].userData[0] == result["hosts"][i]["dp_id"]) {
+					link = new Link("", switchNodes[j], hostNode)
+					link.css({
+						border:  'solid 2px black',
+					});
+					links.push(link)
+					layer.addChild(link)
+					break
+				}
+
+				
+			}
+			hostNodes[i].on('mouseenter', function (event) {
+				var tooltip = new Tooltip(stage);
+				tooltip.setHtml(this.userData)
+				var eventDetails = event.details;
+				tooltip.showAt(eventDetails.x, eventDetails.y);
+			});
+		}
+		for (var i in result["links"]) {
+			var src = result["links"][i]["src_dp_id"]
+			var dst = result["links"][i]["dst_dp_id"]
+			var link = new Link()
+			link.text =""
+			link.userData="[Port: dp_id="+src+", port_no="+result["links"][i]["src_port_no"]+"] to [Port: dp_id="+dst+", port_no="+result["links"][i]["dst_port_no"]+"]"
+			for (var j in switchNodes) {
+				if (switchNodes[j].userData[0] == src) {
+					link.setBegin(switchNodes[j])
+				}
+				if (switchNodes[j].userData[0] == dst) {
+					link.setEnd(switchNodes[j])
+				}
+			}
+			link.css({
+				border:  'solid 2px black',
+			});
+			links.push(link)
+			layer.addChild(link)
+			link.on('mouseenter', function (event) {
+				var tooltip = new Tooltip(stage);
+				tooltip.setHtml(this.userData)
+				var eventDetails = event.details;
+				tooltip.showAt(eventDetails.x, eventDetails.y);
+			});
+		}
+		stage.show();
+
+	</script>
+</body>
+
+
+</html>
