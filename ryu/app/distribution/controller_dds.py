@@ -241,10 +241,9 @@ class GUIServerApp(app_manager.RyuApp):
     def sub_writer(self):
         while 1:
             w = self.lib.getMatchedChange()
-            str1 = '.'.join(str(i) for i in w.writer_info)
-            print(f"writer info: {list(w.writer_info)}")
+            identify = '.'.join(str(i) for i in w.writer_info)
             for i in range(len(self.global_topo["controllers"])):
-                if self.global_topo["controllers"][i]["identify"] == str1:
+                if self.global_topo["controllers"][i]["identify"] == identify:
                     self.global_topo["controllers"][i]["is_live"] = False
                     print("A controller exit.")
             time.sleep(10)
@@ -289,11 +288,15 @@ class GUIServerApp(app_manager.RyuApp):
                 # sw enter
                 if switch_data.switch_info.operation:
                     identify = '.'.join(str(i) for i in switch_data.writer_info)
-                    print(f"writer info: {list(switch_data.writer_info)}")
                     temp_controller = {"identify": identify,
                                        "c_id": switch_data.switch_info.controller_id,
                                        "is_live": True}
-                    if temp_controller not in self.global_topo["controllers"]:
+                    updated = False
+                    for c in self.global_topo["controllers"]:
+                        if c["c_id"] == temp_controller["c_id"]:
+                            c["identify"], c["is_live"] = temp_controller["identify"], True
+                            updated = True
+                    if not updated:
                         self.global_topo["controllers"].append(temp_controller)
                     temp_switch = {"c_id": switch_data.switch_info.controller_id,
                                    "dp_id": switch_data.switch_info.dp_id,
