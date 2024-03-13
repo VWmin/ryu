@@ -94,19 +94,12 @@ class GUIServerApp(app_manager.RyuApp):
         self.lib.subscribeHost.restype = StructHost
         self.lib.getMatchedChange.restype = StructWriterInfo
         self.lib.matchNewSubscription.restype = c_bool
-        self.subSwitchThr = threading.Thread(target=self.sub_switch_threading, name='subSwitch')
-        self.subPortThr = threading.Thread(target=self.sub_port_threading, name='subPort')
-        self.subLinkThr = threading.Thread(target=self.sub_link_threading, name='subLink')
-        self.subHostThr = threading.Thread(target=self.sub_host_threading, name='subHost')
-        self.subW = threading.Thread(target=self.sub_writer, name='subw')
-        self.matchOtherController = threading.Thread(target=self.new_controller_enter_threading,
-                                                     name='matchOtherController')
-        self.subW.start()
-        self.subHostThr.start()
-        self.subPortThr.start()
-        self.subLinkThr.start()
-        self.subSwitchThr.start()
-        self.matchOtherController.start()
+        self.sub_switch_thr = hub.spawn(self.sub_switch_threading)
+        self.sub_port_thr = hub.spawn(self.sub_port_threading)
+        self.sub_link_thr = hub.spawn(self.sub_link_threading)
+        self.sub_host_thr = hub.spawn(self.sub_host_threading)
+        self.sub_writer_thr = hub.spawn(self.sub_writer)
+        self.sub_match_others = hub.spawn(self.new_controller_enter_threading)
         self.is_active = True
         self.controller_id = self.CONF.controller_id
         self.topo_file = f"topo-{self.controller_id}.json"
