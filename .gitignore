@@ -18,6 +18,6 @@ nosetests.xml
 
 .github
 .idea
-ryu/app/distribution/python3.7.ddslog
+ryu/app/distribution/*.ddslog
 ryu/app/distribution/topo-*.json
 ryu/app/distribution/zrddslicence.lic

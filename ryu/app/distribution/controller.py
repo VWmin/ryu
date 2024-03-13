@@ -7,6 +7,8 @@ import threading
 import time
 
 from ctypes import *
+
+from ryu.app.distribution.web_app import GUIServerController
 from ryu.app.wsgi import WSGIApplication
 import networkx as nx
 import requests
@@ -22,8 +24,6 @@ from ryu.ofproto import ofproto_v1_3, ofproto_v1_3_parser
 from ryu.lib.packet import packet, ether_types, arp, ethernet, ipv4, lldp
 from ryu.topology import switches, event
 from ryu.topology.api import get_switch, get_link, get_host
-
-from distribution.web_app import GUIServerController
 
 PATH = os.path.dirname(__file__)
 LOG = logging.getLogger(__name__)
@@ -99,7 +99,8 @@ class GUIServerApp(app_manager.RyuApp):
         self.subLinkThr = threading.Thread(target=self.sub_link_threading, name='subLink')
         self.subHostThr = threading.Thread(target=self.sub_host_threading, name='subHost')
         self.subW = threading.Thread(target=self.sub_writer, name='subw')
-        self.matchOtherController = threading.Thread(target=self.new_controller_enter_threading, name='matchOtherController')
+        self.matchOtherController = threading.Thread(target=self.new_controller_enter_threading,
+                                                     name='matchOtherController')
         self.subW.start()
         self.subHostThr.start()
         self.subPortThr.start()
@@ -343,7 +344,8 @@ class GUIServerApp(app_manager.RyuApp):
                                  "ofproto": str(port_data.ofproto, encoding="utf-8"), "config": port_data.config,
                                  "state": port_data.state}
                     for i in range(len(self.global_topo["ports"])):
-                        if self.global_topo["ports"][i]["dp_id"] == temp_port["dp_id"] and self.global_topo["ports"][i]["port_no"] == temp_port["port_no"]:
+                        if self.global_topo["ports"][i]["dp_id"] == temp_port["dp_id"] and self.global_topo["ports"][i][
+                            "port_no"] == temp_port["port_no"]:
                             self.global_topo["ports"][i] = temp_port
                             with open(self.topo_file, 'w', encoding='UTF-8') as fp:
                                 fp.write(json.dumps(self.global_topo, indent=2, ensure_ascii=False))
@@ -354,7 +356,8 @@ class GUIServerApp(app_manager.RyuApp):
 
                 elif port_data.operation == 0:
                     for i in range(len(self.global_topo["ports"])):
-                        if self.global_topo["ports"][i]["dp_id"] == port_data.dp_id and self.global_topo["ports"][i]["port_no"] == port_data.port_no:
+                        if self.global_topo["ports"][i]["dp_id"] == port_data.dp_id and self.global_topo["ports"][i][
+                            "port_no"] == port_data.port_no:
                             del self.global_topo["ports"][i]
                             break
                     for j in range(len(self.global_topo["switches"])):

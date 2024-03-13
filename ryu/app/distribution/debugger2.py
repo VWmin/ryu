@@ -10,7 +10,7 @@ cfg.CONF.register_cli_opts([cfg.IntOpt('controller-id', default=1, help='distrib
 
 
 def main():
-    sys.argv.append('/home/fwy/Desktop/graph/distribution/controller.py')
+    sys.argv.append('/home/fwy/ryu/ryu/app/distribution/controller.py')
     # sys.argv.append('--verbose')
     sys.argv.append('--enable-debugger')
     sys.argv.append('--observe-links')
