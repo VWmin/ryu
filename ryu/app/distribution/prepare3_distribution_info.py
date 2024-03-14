@@ -1,14 +1,12 @@
 import json
 import pickle
-import random
 
 import cherrypy
-import networkx as nx
 import requests
 
 from prepare1_graph_info import GraphInfo
+from ryu.app.distribution.route import heat_degree_matrix
 from ryu.topology import switches
-from ryu.topology.switches import Link
 
 
 def _get_exp_info() -> GraphInfo:
@@ -30,6 +28,19 @@ def _get_net_links():
 class DistributionInfo:
     def __init__(self, graph_info: GraphInfo):
         self.graph_info = graph_info
+
+        # route
+        self.network = self.graph_info.graph
+        self.network.add_node(0)  # dummy node
+        self.instance = heat_degree_matrix.HeatDegreeModel(self.network, graph_info.D, graph_info.B, graph_info.S2R)
+        self.routing_trees = self.instance.routing_trees
+        self.src_related_cid = {s: set() for s in graph_info.S}
+
+        for src, routing_tree in self.routing_trees.items():
+            for node in routing_tree:
+                self.src_related_cid[src].add(self.graph_info.sw_to_cid[node])
+
+        # topo
         self.online_cid = set()
         self.online_swes = set()
         self.swes = []
@@ -89,6 +100,16 @@ class DistributionInfo:
                 links.append(link)
         return links
 
+    def latest_routing_trees(self, cid):
+        if cid == 0:
+            return None
+        trees = []
+        for src in self.src_related_cid:
+            if cid in self.src_related_cid[src]:
+                trees.append(self.routing_trees[src])
+                self.src_related_cid[src].remove(cid)
+        return trees
+
 
 class DistributionServer:
     def __init__(self, info: DistributionInfo):
@@ -115,6 +136,10 @@ class DistributionServer:
     @cherrypy.expose
     def links(self):
         return json.dumps(self.info.links())
+
+    @cherrypy.expose
+    def trees(self, cid=0):
+        return pickle.dumps(self.info.latest_routing_trees(int(cid)))
 
 
 if __name__ == '__main__':

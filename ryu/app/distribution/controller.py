@@ -1,27 +1,21 @@
-import copy
 import logging
 import os
 import pickle
 import signal
-import threading
-import time
 
 import requests
 
-from ryu.app.distribution.route import heat_degree_matrix
 from ryu.app.distribution.web_app import GUIServerController
 from ryu.app.wsgi import WSGIApplication
 from ryu.lib import hub
 from ryu import utils
 from ryu.base import app_manager
-from ryu.base.app_manager import lookup_service_brick
 from ryu.controller import ofp_event
 from ryu.controller.handler import CONFIG_DISPATCHER, DEAD_DISPATCHER
 from ryu.controller.handler import MAIN_DISPATCHER, HANDSHAKE_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.lib.packet import packet, ether_types, arp, ethernet
 from prepare1_graph_info import GraphInfo
-from ryu.topology import switches
 
 PATH = os.path.dirname(__file__)
 LOG = logging.getLogger(__name__)
@@ -35,8 +29,7 @@ def _get_exp_info() -> GraphInfo:
 # Serving static files
 class GUIServerApp(app_manager.RyuApp):
     _CONTEXTS = {
-        'wsgi': WSGIApplication,
-        'switches': switches.Switches,
+        'wsgi': WSGIApplication
     }
 
     def __init__(self, *args, **kwargs):
@@ -48,20 +41,13 @@ class GUIServerApp(app_manager.RyuApp):
         self.arp_received = {}
         self.arp_port = {}
         self.datapaths = {}
-        self.echo_delay = {}
-        self.link_delay = {}
-        self.experiment_info = _get_exp_info()
-        self.network = self.experiment_info.graph
-        self.network.add_node(0)  # dummy node
-        self.lock = threading.Lock()
-        self.switch_service = lookup_service_brick("switches")
-        self.monitor_thread = hub.spawn(self._monitor)
-        self.experimental_thread = hub.spawn(self.run_experiment)
-        self.link_flag = False
 
         # distribution
         self.controller_id = self.CONF.controller_id
         self.controller_enter()
+
+        # route
+        self.query_trees_thr = hub.spawn(self.query_trees)
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
@@ -104,33 +90,6 @@ class GUIServerApp(app_manager.RyuApp):
         match = parser.OFPMatch()
         actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER)]
         self.add_flow(datapath, 0, match, actions)
-
-    def _monitor(self):
-        # while len(self.switch_service.link_delay) != len(self.network.edges):
-        #     hub.sleep(10)
-        #     self.logger.info(f"query links, expect {len(self.network.edges)}, "
-        #                      f"now {len(self.switch_service.link_delay)}")
-        #     self.lock.acquire()
-        #     for link, delay in self.switch_service.link_delay.items():
-        #         edge_key = (link.src.dpid, link.dst.dpid)
-        #         if link.dst.dpid < link.src.dpid:
-        #             edge_key = (link.dst.dpid, link.src.dpid)
-        #
-        #         # record dpid to port
-        #         if 'dpid_to_port' not in self.network.edges[edge_key]:
-        #             self.network.edges[edge_key]['dpid_to_port'] = {
-        #                 link.src.dpid: link.dst.port_no,
-        #                 link.dst.dpid: link.src.port_no,
-        #             }
-        #
-        #         # record delay time
-        #         if edge_key not in self.link_delay:
-        #             self.link_delay[edge_key] = delay
-        #             self.network.edges[edge_key]['weight'] = delay
-        #
-        #     self.lock.release()
-        self.link_flag = True
-        self.logger.info("monitor exit...")
 
     def add_flow(self, datapath, priority, match, actions, buffer_id=None):
         ofproto = datapath.ofproto
@@ -240,25 +199,14 @@ class GUIServerApp(app_manager.RyuApp):
         # print(f"cleared flow & group entries for dpid={dpid}")
         # self.show_flow_entries(dpid)
 
-    def run_experiment(self):
-        hub.sleep(30)
-        self.logger.info(f"enter experiment at {time.time()}")
-        while not self.link_flag:
-            hub.sleep(10)
-        self.logger.info(f"start experiment at {time.time()}")
-
-        if self.link_flag and self.controller_id == 1:
-            self.lock.acquire()
-            net_cp = copy.deepcopy(self.network)
-            instance1 = heat_degree_matrix.HeatDegreeModel(net_cp, self.experiment_info.D, self.experiment_info.B, self.experiment_info.S2R)
-            # instance2 = hlmr.HLMR(net_cp, self.experiment_info.D, self.experiment_info.B, self.experiment_info.S2R)
-            # instance3 = STPInstance(net_cp, self.experiment_info.D,  self.experiment_info.S2R)
-            self.lock.release()
-
-            print(f"routing trees: {instance1.routing_trees}")
-            # self.install_routing_trees(instance1.routing_trees, self.experiment_info.S2R)
-            # self.logger.info(f"install group flow ok, s2r is {self.experiment_info.S2R}")
-            hub.sleep(30)
+    def query_trees(self):
+        hub.sleep(20)
+        while self.is_active:
+            print("querying latest routing trees >> ")
+            response = requests.get(f"http://localhost:9002/trees?cid={self.controller_id}")
+            trees = pickle.loads(response.content)
+            print(f"\t{trees}")
+            hub.sleep(5)
 
     def clear_entries(self, routing_trees):
         for src, tree in routing_trees.items():
