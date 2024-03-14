@@ -1,6 +1,9 @@
 import logging
 import os
+import pickle
+import sys
 import threading
+import requests
 
 from ryu.app.distribution.web_app import GUIServerController
 from ryu.app.wsgi import WSGIApplication
@@ -13,15 +16,23 @@ from ryu.controller.handler import CONFIG_DISPATCHER, DEAD_DISPATCHER
 from ryu.controller.handler import MAIN_DISPATCHER, HANDSHAKE_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.lib.packet import packet, ether_types, arp, ethernet
+from prepare1_graph_info import GraphInfo
+from ryu.topology import switches
 
 PATH = os.path.dirname(__file__)
 LOG = logging.getLogger(__name__)
+
+
+def _get_exp_info() -> GraphInfo:
+    response = requests.get("http://localhost:9000/exp_info")
+    return pickle.loads(response.content)
 
 
 # Serving static files
 class GUIServerApp(app_manager.RyuApp):
     _CONTEXTS = {
         'wsgi': WSGIApplication,
+        'switches': switches.Switches,
     }
 
     def __init__(self, *args, **kwargs):
@@ -35,16 +46,16 @@ class GUIServerApp(app_manager.RyuApp):
         self.datapaths = {}
         self.echo_delay = {}
         self.link_delay = {}
-        # self.experiment_info = _get_exp_info()
-        # self.network = self.experiment_info.graph
-        # self.network.add_node(0)  # dummy node
+        self.experiment_info = _get_exp_info()
+        self.network = self.experiment_info.graph
+        self.network.add_node(0)  # dummy node
         self.lock = threading.Lock()
         self.switch_service = lookup_service_brick("switches")
-        # self.monitor_thread = hub.spawn(self._monitor)
+        self.monitor_thread = hub.spawn(self._monitor)
         # self.experimental_thread = hub.spawn(self.run_experiment)
         self.link_flag = False
-        # distribution
 
+        # distribution
         self.controller_id = self.CONF.controller_id
 
     @set_ev_cls(ofp_event.EventOFPErrorMsg, [HANDSHAKE_DISPATCHER, CONFIG_DISPATCHER, MAIN_DISPATCHER])

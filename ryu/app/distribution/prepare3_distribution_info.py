@@ -24,17 +24,7 @@ def _get_net_links():
 
 class DistributionInfo:
     def __init__(self, graph: nx.Graph):
-        self.graph = graph
-        self.controller_number = 2
-        self.cid_to_swes = {}
-        self.sw_to_cid = {}
         self.swes_inter_links = []
-
-        for node in self.graph.nodes:
-            cid = random.randint(1, self.controller_number)
-            self.cid_to_swes.setdefault(cid, [])
-            self.cid_to_swes[cid].append(node)
-            self.sw_to_cid[node] = cid
 
         for link in _get_net_links():
             src_name, src_port_name, src_port_mac, dst_name, dst_port_name, dst_port_mac = link

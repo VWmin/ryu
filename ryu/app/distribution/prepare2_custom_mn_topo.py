@@ -10,7 +10,7 @@ import time
 import cherrypy
 import requests
 from mininet.cli import CLI
-from mininet.log import setLogLevel
+from mininet.log import setLogLevel, info
 from mininet.net import Mininet
 from mininet.node import RemoteController
 from mininet.topo import Topo
@@ -137,8 +137,26 @@ class MininetEnv:
     def __init__(self):
         self.finished = False
         self.info = _get_exp_info()
-        self.net = Mininet(topo=MyTopo(self.info), controller=RemoteController('c0'))
+        self.net = Mininet(topo=MyTopo(self.info), build=False)
+        self.controllers = {}  # cid -> controller
+        self.distribute_sw_to_controller()
         signal.signal(signal.SIGINT, self.signal_handler)
+
+    def distribute_sw_to_controller(self):
+        for i in range(1, self.info.controller_number + 1):
+            c = self.net.addController(name=f'c{i}', controller=RemoteController, port=6633 + i - 1)
+            self.controllers[i] = c
+
+        info('*** Starting network\n')
+        self.net.build()
+
+        info('*** Starting controllers\n')
+        for controller in self.net.controllers:
+            controller.start()
+
+        info('*** Starting switches\n')
+        for swid, cid in self.info.sw_to_cid.items():
+            self.net.get(f's{swid}').start([self.controllers[cid]])
 
     def signal_handler(self, sig, frame):
         print("Received signal to exit.")

@@ -4,10 +4,11 @@
 import sys
 
 from ryu.cmd import manager
+from prepare1_graph_info import GraphInfo
 
 
 def main():
-    sys.argv.append('/home/fwy/ryu/ryu/app/distribution/controller_dds.py')
+    sys.argv.append('/home/fwy/ryu/ryu/app/distribution/controller.py')
     # sys.argv.append('--verbose')
     sys.argv.append('--enable-debugger')
     sys.argv.append('--observe-links')

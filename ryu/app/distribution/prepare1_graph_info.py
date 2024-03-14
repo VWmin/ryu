@@ -5,7 +5,6 @@ import random
 
 import networkx as nx
 import cherrypy
-import random_graph
 
 
 class GraphInfo:
@@ -36,6 +35,16 @@ class GraphInfo:
         print(f"total bw is {self.total_bw}")
         print(f"bw requirement is {self.B}")
 
+        self.controller_number = 2
+        self.cid_to_swes = {}
+        self.sw_to_cid = {}
+
+        for node in self.graph.nodes:
+            cid = random.randint(1, self.controller_number)
+            self.cid_to_swes.setdefault(cid, [])
+            self.cid_to_swes[cid].append(node)
+            self.sw_to_cid[node] = cid
+
         group_no = 1
         self.src_to_group_no = {}
         for s in self.S2R:
@@ -55,6 +64,8 @@ class GraphInfo:
 
         with open('ev_setting.json', 'w') as json_file:
             json.dump(output, json_file, indent=4)
+
+
 
     def src_to_group_ip(self, src):
         return f'224.0.1.{self.src_to_group_no[src]}'
@@ -146,6 +157,7 @@ class GraphInfoServer:
 
 
 if __name__ == "__main__":
+    import random_graph
     g = random_graph.demo_graph()
     # graph = random_graph.gt_itm_ts(100)
     i = GraphInfo(g)
