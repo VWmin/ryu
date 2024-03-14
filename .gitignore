@@ -21,3 +21,5 @@ nosetests.xml
 ryu/app/distribution/*.ddslog
 ryu/app/distribution/topo-*.json
 ryu/app/distribution/zrddslicence.lic
+ryu/app/distribution/graphs
+ryu/app/distribution/ev_setting.json
