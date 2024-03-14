@@ -1,8 +1,12 @@
+import asyncio
 import logging
 import os
 import pickle
+import signal
 import sys
 import threading
+
+import aiohttp
 import requests
 
 from ryu.app.distribution.web_app import GUIServerController
@@ -57,6 +61,20 @@ class GUIServerApp(app_manager.RyuApp):
 
         # distribution
         self.controller_id = self.CONF.controller_id
+        self.controller_enter()
+
+        signal.signal(signal.SIGINT, self.signal_handler)
+
+    def signal_handler(self, sig, frame):
+        print(f"cid({self.controller_id}) exit")
+        hub.spawn(self.controller_leave)
+
+    def controller_enter(self):
+        requests.get(f"http://localhost:9002/enter?cid={self.controller_id}")
+
+    def controller_leave(self):
+        url = f"http://localhost:9002/leave?cid={self.controller_id}"
+        requests.get(url)
 
     @set_ev_cls(ofp_event.EventOFPErrorMsg, [HANDSHAKE_DISPATCHER, CONFIG_DISPATCHER, MAIN_DISPATCHER])
     def error_msg_handler(self, ev):
@@ -192,5 +210,5 @@ class GUIServerApp(app_manager.RyuApp):
                 self.send_packet_out(datapath, msg, actions)
 
 
-app_manager.require_app('ryu.app.rest_topology')
+# app_manager.require_app('ryu.app.rest_topology')
 app_manager.require_app('ryu.app.ofctl_rest')

@@ -1,6 +1,8 @@
 import json
 import os
+import pickle
 
+import requests
 from webob.static import DirectoryApp
 
 from ryu.app.wsgi import ControllerBase, route, Response
@@ -29,9 +31,16 @@ class GUIServerController(ControllerBase):
     #     response.headers['Access-Control-Allow-Origin'] = '*'
     #     return response
     #
-    # @route('switches', '/v2.0/topology/switches', methods=['GET'])
-    # def switches(self, req, **kwargs):
-    #     body = json.dumps(self.dds_app.global_topo['switches'])
-    #     response = Response(content_type='application/json', body=body)
-    #     response.headers['Access-Control-Allow-Origin'] = '*'
-    #     return response
+    @route('switches', '/v1.0/topology/switches', methods=['GET'])
+    def switches(self, req, **kwargs):
+        response = requests.get("http://localhost:9002/switches")
+        response = Response(content_type='application/json', body=response.content)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
+
+    @route('links', '/v1.0/topology/links', methods=['GET'])
+    def links(self, req, **kwargs):
+        response = requests.get("http://localhost:9002/links")
+        response = Response(content_type='application/json', body=response.content)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response

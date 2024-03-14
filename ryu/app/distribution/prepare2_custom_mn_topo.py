@@ -49,6 +49,20 @@ class ExpExecServer:
         self.run_iperf()
 
     @cherrypy.expose
+    def switches(self):
+        swes = []
+
+        for sw in self.net.switches:
+            sw_info = {"dpid": sw.dpid, "ports": []}
+            for port in sw.intfs.values():
+                if port.name == 'lo':
+                    continue
+                port_info = {"name": port.name, "mac": port.MAC()}
+                sw_info["ports"].append(port_info)
+            swes.append(sw_info)
+        return pickle.dumps(swes)
+
+    @cherrypy.expose
     def links(self):
         links = []
 
@@ -157,8 +171,6 @@ class MininetEnv:
         if self.net is not None:
             self.net.stop()
         sys.exit(0)
-
-
 
     def start(self):
         # self.net.start()
