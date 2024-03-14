@@ -36,41 +36,6 @@ def int_to_ip_address(number: int):
     return f"10.0.{third_octet}.{fourth_octet}"
 
 
-# mininet topo only
-class MyTopo(Topo):
-    def __init__(self, info):
-        self.info = info
-        self.graph = info.graph
-        super().__init__()
-
-    def build(self):
-        # related host
-        terminals = set()
-        for s in self.info.S2R:
-            terminals.add(s)
-            for r in self.info.S2R[s]:
-                terminals.add(r)
-
-        for n in self.graph.nodes:
-            s_name = f"s{n}"
-            h_name = f"h{n}"
-            if self.info.stp:
-                self.addSwitch(s_name, dpid=int_to_16bit_hex_string(n), stp=True, failMode='standalone')
-            else:
-                self.addSwitch(s_name, dpid=int_to_16bit_hex_string(n))
-            if n in terminals:
-                # Add single host on designated switches
-                self.addHost(h_name, ip=int_to_ip_address(n))
-                # directly add the link between hosts and their gateways
-                self.addLink(s_name, h_name)
-
-        # Connect your switches to each other as defined in networkx graph
-        for (n1, n2) in self.graph.edges:
-            s_name_1, s_name_2 = f"s{n1}", f"s{n2}"
-            self.addLink(s_name_1, s_name_2, cls=TCLink,
-                         bw=self.graph[n1][n2]['bandwidth'], delay=f"{self.graph[n1][n2]['weight']}ms")
-
-
 # outside access to mininet
 class ExpExecServer:
     def __init__(self, info, net):
@@ -137,17 +102,46 @@ class MininetEnv:
     def __init__(self):
         self.finished = False
         self.info = _get_exp_info()
-        self.net = Mininet(topo=MyTopo(self.info), build=False)
+        self.net = Mininet(topo=None, build=False)
         self.controllers = {}  # cid -> controller
-        self.distribute_sw_to_controller()
+        self.build_net()
         signal.signal(signal.SIGINT, self.signal_handler)
 
-    def distribute_sw_to_controller(self):
+    def build_net(self):
+        # related host
+        terminals = set()
+        for s in self.info.S2R:
+            terminals.add(s)
+            for r in self.info.S2R[s]:
+                terminals.add(r)
+
+        # add controllers
         for i in range(1, self.info.controller_number + 1):
             c = self.net.addController(name=f'c{i}', controller=RemoteController, port=6633 + i - 1)
             self.controllers[i] = c
 
-        info('*** Starting network\n')
+        # add sw add its connected host
+        for n in self.info.graph.nodes:
+            s_name = f"s{n}"
+            h_name = f"h{n}"
+            print(f"cid {self.info.sw_to_cid[n]} <--> dpid {n}")
+            if self.info.stp:
+                self.net.addSwitch(s_name, dpid=int_to_16bit_hex_string(n), stp=True, failMode='standalone')
+            else:
+                self.net.addSwitch(s_name, dpid=int_to_16bit_hex_string(n))
+            if n in terminals:
+                # Add single host on designated switches
+                self.net.addHost(h_name, ip=int_to_ip_address(n))
+                # directly add the link between hosts and their gateways
+                self.net.addLink(s_name, h_name)
+
+        # Connect your switches to each other as defined in networkx graph
+        for (n1, n2) in self.info.graph.edges:
+            s_name_1, s_name_2 = f"s{n1}", f"s{n2}"
+            self.net.addLink(s_name_1, s_name_2, cls=TCLink,
+                             bw=self.info.graph[n1][n2]['bandwidth'], delay=f"{self.info.graph[n1][n2]['weight']}ms")
+
+        info('*** Building network\n')
         self.net.build()
 
         info('*** Starting controllers\n')
@@ -155,8 +149,8 @@ class MininetEnv:
             controller.start()
 
         info('*** Starting switches\n')
-        for swid, cid in self.info.sw_to_cid.items():
-            self.net.get(f's{swid}').start([self.controllers[cid]])
+        for sw, cid in self.info.sw_to_cid.items():
+            self.net.get(f's{sw}').start([self.controllers[cid]])
 
     def signal_handler(self, sig, frame):
         print("Received signal to exit.")
@@ -164,8 +158,10 @@ class MininetEnv:
             self.net.stop()
         sys.exit(0)
 
+
+
     def start(self):
-        self.net.start()
+        # self.net.start()
 
         threads = [threading.Thread(target=self.run_mn_cli), threading.Thread(target=self.run_exp_exec_server)]
         if self.info.stp:

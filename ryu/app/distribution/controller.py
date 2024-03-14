@@ -51,7 +51,7 @@ class GUIServerApp(app_manager.RyuApp):
         self.network.add_node(0)  # dummy node
         self.lock = threading.Lock()
         self.switch_service = lookup_service_brick("switches")
-        self.monitor_thread = hub.spawn(self._monitor)
+        # self.monitor_thread = hub.spawn(self._monitor)
         # self.experimental_thread = hub.spawn(self.run_experiment)
         self.link_flag = False
 

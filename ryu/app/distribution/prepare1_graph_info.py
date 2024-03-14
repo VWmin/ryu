@@ -55,7 +55,8 @@ class GraphInfo:
             "s2r": {},
             "bw_requirement": self.B,
             "total_bw": self.total_bw,
-            "src_to_group": self.src_to_group_no
+            "src_to_group": self.src_to_group_no,
+            "cid_to_swes": self.cid_to_swes,
         }
         for s in self.S2R:
             output["s2r"][s] = []
