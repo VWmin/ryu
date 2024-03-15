@@ -43,8 +43,8 @@ class DistributionInfo:
         # topo
         self.online_cid = set()
         self.online_swes = set()
-        self.swes = []
-        self.swes_inter_links = []
+        self.swes = []  # [dpid: str, ports: [...], ...]
+        self.swes_inter_links = []  # [src: {dpid, port_no, hw_addr, name}, dst: {...}, ...]
 
         for sw in _get_net_switches():
             dpid = sw["dpid"]
@@ -113,6 +113,16 @@ class DistributionInfo:
                 self.src_related_cid[src].remove(cid)
         return trees, self.graph_info.multicast_info
 
+    def all_trees(self):
+        trees = {}  # {[src -> {switches: [], links: []}], ...}
+        tmp_dpid2sw = {int(sw["dpid"]): sw for sw in self.swes}
+        tmp_dpid2link = {(int(link["src"]["dpid"]), int(link["dst"]["dpid"])): link for link in self.swes_inter_links}
+        for src, tree in self.routing_trees.items():
+            swes = [tmp_dpid2sw[node] for node in tree.nodes]
+            links = [tmp_dpid2link[(u, v)] for u, v in tree.edges]
+            trees[src] = {"switches": swes, "links": links, "hosts": []}
+        return trees
+
 
 class DistributionServer:
     def __init__(self, info: DistributionInfo):
@@ -147,6 +157,10 @@ class DistributionServer:
     @cherrypy.expose
     def trees(self, cid=0):
         return pickle.dumps(self.info.latest_routing_trees(int(cid)))
+
+    @cherrypy.expose
+    def all_trees(self):
+        return json.dumps(self.info.all_trees())
 
 
 if __name__ == '__main__':

@@ -8,7 +8,8 @@ from prepare1_graph_info import GraphInfo
 
 
 def main():
-    sys.argv.append('~/ryu/ryu/app/distribution/controller.py')
+    sys.argv.append('/home/fwy/ryu/ryu/app/distribution/controller.py')
+    sys.argv.append('/home/fwy/ryu/ryu/app/flow_manager/flowmanager.py')
     # sys.argv.append('--verbose')
     sys.argv.append('--enable-debugger')
     sys.argv.append('--observe-links')
@@ -18,7 +19,6 @@ def main():
     sys.argv.append('8001')
     sys.argv.append('--controller-id')
     sys.argv.append('2')
-    sys.argv.append('~/flowmanager/flowmanager.py')
     manager.main()
 
 

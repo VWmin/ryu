@@ -20,14 +20,9 @@ $(function () {
   <a href="index.html">Home</a> \
   <a href="flows.html">Flows</a> \
   <a href="groups.html">Groups</a> \
-  <a href="meters.html">Meters</a> \
-  <a href="flowform.html">Flow Control</a> \
   <a href="groupform.html">Group Control</a> \
-  <a href="meterform.html">Meter Control</a> \
   <a href="topology.html">Topology</a> \
-  <a href="messages.html">Messages</a> \
-  <a href="config.html">Configuration</a> \
-  <a href="about.html">About</a> \
+  <a href="multicasttree.html">Multicast Tree</a> \
   </div>'
 
 /*  <div class="topmenu"> \

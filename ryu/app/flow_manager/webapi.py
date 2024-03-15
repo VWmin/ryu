@@ -15,11 +15,14 @@
 """
 This module includes class WebApi, which is part of the FlowManager application.
 """
-
+import json
 import os
 import sys
 import logging
 import mimetypes
+
+import requests
+
 from ryu.app.wsgi import ControllerBase
 from ryu.app.wsgi import Response
 from ryu.app.wsgi import WebSocketRPCServer
@@ -108,7 +111,21 @@ class WebApi(ControllerBase):
         logger.debug("Requesting topology")
         res = Response(content_type="application/json")
         res.headers["Access-Control-Allow-Origin"] = "*"
-        res.json = self.ctrl_api.get_topology_data()
+        r1 = requests.get("http://localhost:9002/links")
+        r2 = requests.get("http://localhost:9002/switches")
+        # res.json = self.ctrl_api.get_topology_data()
+        res.json = {"switches": json.loads(r2.content), "links": json.loads(r1.content), "hosts":  []}
+        return res
+
+    @route("multicasttrees", "/multicasttrees", methods=["GET"])
+    def get_multicast_trees(self, _):
+        """Get multicast trees info"""
+        logger.debug("Requesting multicast trees")
+        res = Response(content_type="application/json")
+        res.headers["Access-Control-Allow-Origin"] = "*"
+        response = requests.get("http://localhost:9002/all_trees")
+        # res.json = self.ctrl_api.get_topology_data()
+        res.json = json.loads(response.content)
         return res
 
     @route("monitor", "/logs", methods=["GET"])
