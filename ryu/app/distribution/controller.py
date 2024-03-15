@@ -35,14 +35,14 @@ def _get_all_links():
 # Serving static files
 class GUIServerApp(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
-    _CONTEXTS = {
-        'wsgi': WSGIApplication
-    }
+    # _CONTEXTS = {
+    #     'wsgi': WSGIApplication
+    # }
 
     def __init__(self, *args, **kwargs):
         super(GUIServerApp, self).__init__(*args, **kwargs)
-        wsgi = kwargs['wsgi']
-        wsgi.register(GUIServerController)
+        # wsgi = kwargs['wsgi']
+        # wsgi.register(GUIServerController)
         # mine
         self.mac_to_port = {}
         self.arp_received = {}
