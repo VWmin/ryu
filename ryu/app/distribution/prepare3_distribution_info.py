@@ -4,7 +4,7 @@ import pickle
 import cherrypy
 import requests
 
-from prepare1_graph_info import GraphInfo
+from prepare1_graph_info import *
 from ryu.app.distribution.route import heat_degree_matrix
 from ryu.topology import switches
 
@@ -100,6 +100,9 @@ class DistributionInfo:
                 links.append(link)
         return links
 
+    def all_links(self):
+        return self.swes_inter_links
+
     def latest_routing_trees(self, cid):
         if cid == 0:
             return None
@@ -108,7 +111,7 @@ class DistributionInfo:
             if cid in self.src_related_cid[src]:
                 trees.append(self.routing_trees[src])
                 self.src_related_cid[src].remove(cid)
-        return trees
+        return trees, self.graph_info.multicast_info
 
 
 class DistributionServer:
@@ -136,6 +139,10 @@ class DistributionServer:
     @cherrypy.expose
     def links(self):
         return json.dumps(self.info.links())
+
+    @cherrypy.expose
+    def all_links(self):
+        return pickle.dumps(self.info.all_links())
 
     @cherrypy.expose
     def trees(self, cid=0):

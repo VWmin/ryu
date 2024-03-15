@@ -18,7 +18,7 @@ from mininet.topo import Topo
 from mininet.util import customClass
 from mininet.link import TCLink
 
-from prepare1_graph_info import GraphInfo
+from prepare1_graph_info import *
 
 
 def int_to_16bit_hex_string(number: int):

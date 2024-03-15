@@ -15,7 +15,7 @@ from ryu.controller.handler import CONFIG_DISPATCHER, DEAD_DISPATCHER
 from ryu.controller.handler import MAIN_DISPATCHER, HANDSHAKE_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.lib.packet import packet, ether_types, arp, ethernet
-from prepare1_graph_info import GraphInfo
+from prepare1_graph_info import GraphInfo, MulticastInfo
 
 PATH = os.path.dirname(__file__)
 LOG = logging.getLogger(__name__)
@@ -23,6 +23,11 @@ LOG = logging.getLogger(__name__)
 
 def _get_exp_info() -> GraphInfo:
     response = requests.get("http://localhost:9000/exp_info")
+    return pickle.loads(response.content)
+
+
+def _get_all_links():
+    response = requests.get("http://localhost:9002/all_links")
     return pickle.loads(response.content)
 
 
@@ -45,9 +50,11 @@ class GUIServerApp(app_manager.RyuApp):
         # distribution
         self.controller_id = self.CONF.controller_id
         self.controller_enter()
+        self.dpid_to_port = GUIServerApp.parse_links(_get_all_links())
 
         # route
         self.query_trees_thr = hub.spawn(self.query_trees)
+        self.node_installed_entries = set()
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
@@ -60,6 +67,16 @@ class GUIServerApp(app_manager.RyuApp):
 
     def controller_leave(self):
         requests.get(f"http://localhost:9002/leave?cid={self.controller_id}")
+
+    @staticmethod
+    def parse_links(links):
+        dpid_to_port = {}
+        for link in links:
+            src_dpid, src_port_no = int(link["src"]["dpid"]), int(link["src"]["port_no"])
+            dst_dpid, dst_port_no = int(link["dst"]["dpid"]), int(link["dst"]["port_no"])
+            dpid_to_port[(src_dpid, dst_dpid)] = src_port_no
+            dpid_to_port[(dst_dpid, src_dpid)] = dst_port_no
+        return dpid_to_port
 
     @set_ev_cls(ofp_event.EventOFPErrorMsg, [HANDSHAKE_DISPATCHER, CONFIG_DISPATCHER, MAIN_DISPATCHER])
     def error_msg_handler(self, ev):
@@ -204,32 +221,32 @@ class GUIServerApp(app_manager.RyuApp):
         while self.is_active:
             print("querying latest routing trees >> ")
             response = requests.get(f"http://localhost:9002/trees?cid={self.controller_id}")
-            trees = pickle.loads(response.content)
-            print(f"\t{trees}")
+            trees, multicast_info = pickle.loads(response.content)
+            self.install_routing_trees(trees, multicast_info)
             hub.sleep(5)
 
-    def clear_entries(self, routing_trees):
+    def clear_entries(self, routing_trees, info: MulticastInfo):
         for src, tree in routing_trees.items():
-            gpid = self.experiment_info.src_to_group_no[src]
+            gpid = info.src_to_group_no[src]
             for n in tree.nodes:
                 self.clear_flow_and_group_entries(n, gpid)
 
-    def install_routing_trees(self, trees, S2R):
+    def install_routing_trees(self, trees, info: MulticastInfo):
         output = {}
         for src in trees:
-            group_id = self.experiment_info.src_to_group_no[src]
-            multicast_ip = self.experiment_info.src_to_group_ip(src)
+            group_id = info.src_to_group_no[src]
+            multicast_ip = info.src_to_group_ip(src)
             tree = trees[src]
 
             # install group table and flow entry for sw -> sw
-            self.install_routing_tree(tree, src, S2R[src], group_id, multicast_ip)
+            self.install_routing_tree(tree, src, info.s2r[src], group_id, multicast_ip)
 
             # log info
-            graph_string = "\nDirected Graph:\n"
-            output[src] = []
-            for edge in tree.edges():
-                graph_string += f"{edge[0]} -> {edge[1]};\n"
-                output[src].append(f"{edge[0]}-{edge[1]}")
+            # graph_string = "\nDirected Graph:\n"
+            # output[src] = []
+            # for edge in tree.edges():
+            #     graph_string += f"{edge[0]} -> {edge[1]};\n"
+            #     output[src].append(f"{edge[0]}-{edge[1]}")
             # self.logger.info(f"the routing tree of {src} is {graph_string}")
 
         # dump routing trees to file.
@@ -237,22 +254,24 @@ class GUIServerApp(app_manager.RyuApp):
         #     json.dump(output, json_file, indent=4)
 
     def install_routing_tree(self, tree, cur_node, recvs, group_id, multicast_ip):
-        datapath = self.datapaths[cur_node]
-
         succ = list(tree.successors(cur_node))
 
         if len(succ) > 0:
             # self.logger.info("installing group table and flow to %s", cur_node)
-            out_ports = [self.network[cur_node][e]['dpid_to_port'][e] for e in succ]
+            out_ports = [self.dpid_to_port[(cur_node, next_node)] for next_node in succ]
             if cur_node in recvs:
                 out_ports.append(1)
-            self.send_group_mod_flood(datapath, out_ports, group_id)
-            self.add_flow_to_group_table(datapath, group_id, multicast_ip)
+
+            if cur_node in self.datapaths:
+                datapath = self.datapaths[cur_node]
+                self.clear_flow_and_group_entries(datapath.id, group_id)
+                self.send_group_mod_flood(datapath, out_ports, group_id)
+                self.add_flow_to_group_table(datapath, group_id, multicast_ip)
 
             for node in succ:
                 self.install_routing_tree(tree, node, recvs, group_id, multicast_ip)
-        elif len(succ) == 0 and cur_node in recvs:
-            self.add_flow_to_connected_host(datapath, multicast_ip)
+        elif len(succ) == 0 and cur_node in recvs and cur_node in self.datapaths:
+            self.add_flow_to_connected_host(self.datapaths[cur_node], multicast_ip)
 
     def send_group_mod_flood(self, datapath, out_ports, group_id):
         ofproto = datapath.ofproto
@@ -273,7 +292,6 @@ class GUIServerApp(app_manager.RyuApp):
         match = parser.OFPMatch(eth_type=0x800, ipv4_dst=multicast_ip)
         actions = [parser.OFPActionOutput(1)]
         self.add_flow(datapath, 1, match, actions)
-
 
 
 # app_manager.require_app('ryu.app.rest_topology')

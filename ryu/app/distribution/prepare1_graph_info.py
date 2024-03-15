@@ -7,6 +7,13 @@ import networkx as nx
 import cherrypy
 
 
+class MulticastInfo:
+    def __init__(self, s2r, src_to_group_no, src_to_group_ip):
+        self.s2r = s2r
+        self.src_to_group_no = src_to_group_no
+        self.src_to_group_ip = src_to_group_ip
+
+
 class GraphInfo:
     def __init__(self, graph: nx.Graph):
         self.graph = nx.Graph()
@@ -50,6 +57,8 @@ class GraphInfo:
         for s in self.S2R:
             self.src_to_group_no[s] = group_no
             group_no += 1
+
+        self.multicast_info = MulticastInfo(self.S2R, self.src_to_group_no, {s: self.src_to_group_ip(s) for s in self.S})
 
         output = {
             "s2r": {},
