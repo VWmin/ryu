@@ -16,6 +16,7 @@ from ryu.controller.handler import MAIN_DISPATCHER, HANDSHAKE_DISPATCHER
 from ryu.controller.handler import set_ev_cls
 from ryu.lib.packet import packet, ether_types, arp, ethernet
 from prepare1_graph_info import GraphInfo, MulticastInfo
+from ryu.ofproto import ofproto_v1_3, ofproto_v1_5
 
 PATH = os.path.dirname(__file__)
 LOG = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ def _get_all_links():
 
 # Serving static files
 class GUIServerApp(app_manager.RyuApp):
+    OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
     _CONTEXTS = {
         'wsgi': WSGIApplication
     }
@@ -222,6 +224,7 @@ class GUIServerApp(app_manager.RyuApp):
             print("querying latest routing trees >> ")
             response = requests.get(f"http://localhost:9002/trees?cid={self.controller_id}")
             trees, multicast_info = pickle.loads(response.content)
+            print(f"\ttrees: {trees}, multicast info: {multicast_info}")
             self.install_routing_trees(trees, multicast_info)
             hub.sleep(5)
 
@@ -235,7 +238,7 @@ class GUIServerApp(app_manager.RyuApp):
         output = {}
         for src in trees:
             group_id = info.src_to_group_no[src]
-            multicast_ip = info.src_to_group_ip(src)
+            multicast_ip = info.src_to_group_ip[src]
             tree = trees[src]
 
             # install group table and flow entry for sw -> sw
@@ -257,14 +260,14 @@ class GUIServerApp(app_manager.RyuApp):
         succ = list(tree.successors(cur_node))
 
         if len(succ) > 0:
-            # self.logger.info("installing group table and flow to %s", cur_node)
             out_ports = [self.dpid_to_port[(cur_node, next_node)] for next_node in succ]
             if cur_node in recvs:
                 out_ports.append(1)
 
             if cur_node in self.datapaths:
+                self.logger.info("installing group table and flow to %s", cur_node)
                 datapath = self.datapaths[cur_node]
-                self.clear_flow_and_group_entries(datapath.id, group_id)
+                # self.clear_flow_and_group_entries(datapath.id, group_id)
                 self.send_group_mod_flood(datapath, out_ports, group_id)
                 self.add_flow_to_group_table(datapath, group_id, multicast_ip)
 

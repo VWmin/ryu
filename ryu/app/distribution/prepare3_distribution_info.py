@@ -106,10 +106,10 @@ class DistributionInfo:
     def latest_routing_trees(self, cid):
         if cid == 0:
             return None
-        trees = []
+        trees = {}
         for src in self.src_related_cid:
             if cid in self.src_related_cid[src]:
-                trees.append(self.routing_trees[src])
+                trees[src] = self.routing_trees[src]
                 self.src_related_cid[src].remove(cid)
         return trees, self.graph_info.multicast_info
 

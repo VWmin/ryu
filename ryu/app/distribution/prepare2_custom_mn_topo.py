@@ -140,9 +140,9 @@ class MininetEnv:
             h_name = f"h{n}"
             print(f"cid {self.info.sw_to_cid[n]} <--> dpid {n}")
             if self.info.stp:
-                self.net.addSwitch(s_name, dpid=int_to_16bit_hex_string(n), stp=True, failMode='standalone')
+                self.net.addSwitch(s_name, dpid=int_to_16bit_hex_string(n), protocols='OpenFlow13', stp=True, failMode='standalone')
             else:
-                self.net.addSwitch(s_name, dpid=int_to_16bit_hex_string(n))
+                self.net.addSwitch(s_name, dpid=int_to_16bit_hex_string(n), protocols='OpenFlow13')
             if n in terminals:
                 # Add single host on designated switches
                 self.net.addHost(h_name, ip=int_to_ip_address(n))
