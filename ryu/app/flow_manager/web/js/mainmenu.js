@@ -27,7 +27,7 @@ $(function () {
   var menu = '<div class="menuitem"> \
   <h1> GLOBAL </h1> \
   <a href="index.html">Topology</a> \
-  <a href="groupform.html">Group Control</a> \
+  <a href="groupcontroll.html">Group Control</a> \
   <a href="multicasttree.html">Multicast Tree</a> \
   <h1> LOCAL </h1> \
   <a href="flows.html">Flows</a> \

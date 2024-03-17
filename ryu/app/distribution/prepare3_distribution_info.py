@@ -29,6 +29,9 @@ class DistributionInfo:
     def __init__(self, graph_info: GraphInfo):
         self.graph_info = graph_info
 
+        # multicast groups
+        self.src_recvs = {src: list(graph_info.S2R[src]) for src in graph_info.S2R}
+
         # route
         self.network = self.graph_info.graph
         self.network.add_node(0)  # dummy node
@@ -126,6 +129,18 @@ class DistributionInfo:
             trees[src] = {"switches": swes, "links": links, "hosts": []}
         return trees
 
+    def current_groups(self):
+        return self.src_recvs
+
+    def available_nodes(self):
+        # ret: {available_src: [nodes], available_dst: [nodes]}
+        cur_nodes = [int(sw["dpid"]) for sw in self.swes]
+        available_src = []
+        for n in cur_nodes:
+            if n not in self.src_recvs:
+                available_src.append(n)
+        return {"available_src": available_src, "available_dst": cur_nodes}
+
 
 class DistributionServer:
     def __init__(self, info: DistributionInfo):
@@ -164,6 +179,14 @@ class DistributionServer:
     @cherrypy.expose
     def all_trees(self):
         return json.dumps(self.info.all_trees())
+
+    @cherrypy.expose
+    def current_groups(self):
+        return json.dumps(self.info.current_groups())
+
+    @cherrypy.expose
+    def available_nodes(self):
+        return json.dumps(self.info.available_nodes())
 
 
 if __name__ == '__main__':

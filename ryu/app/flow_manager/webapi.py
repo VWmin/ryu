@@ -117,7 +117,7 @@ class WebApi(ControllerBase):
         res.json = {"switches": json.loads(r2.content), "links": json.loads(r1.content), "hosts":  []}
         return res
 
-    @route("multicasttrees", "/multicasttrees", methods=["GET"])
+    @route("monitor", "/multicasttrees", methods=["GET"])
     def get_multicast_trees(self, _):
         """Get multicast trees info"""
         logger.debug("Requesting multicast trees")
@@ -126,6 +126,26 @@ class WebApi(ControllerBase):
         response = requests.get("http://localhost:9002/all_trees")
         # res.json = self.ctrl_api.get_topology_data()
         res.json = json.loads(response.content)
+        return res
+
+    @route("monitor", "/currentgroups", methods=["GET"])
+    def get_current_groups(self, _):
+        """Get current multicast groups"""
+        logger.debug("Requesting multicast trees")
+        res = Response(content_type="application/json")
+        res.headers["Access-Control-Allow-Origin"] = "*"
+        response = requests.get("http://localhost:9002/current_groups")
+        res.json = json.loads(response.content)
+        return res
+
+    @route("monitor", "/availablenodes", methods=["GET"])
+    def get_switches(self, _):
+        """Get Switches info"""
+        logger.debug("Requesting topology")
+        res = Response(content_type="application/json")
+        res.headers["Access-Control-Allow-Origin"] = "*"
+        r2 = requests.get("http://localhost:9002/available_nodes")
+        res.json = json.loads(r2.content)
         return res
 
     @route("monitor", "/logs", methods=["GET"])

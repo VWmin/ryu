@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html lang="zh-cn">
+<head>
+    <title>Group Control</title>
+    <link rel="shortcut icon" href="img/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" type="text/css" href="css/style.css?v2">
+    <link rel="stylesheet" type="text/css" href="css/menu.css?v2">
+    <link rel="stylesheet" type="text/css" href="css/form.css?v3">
+    <link rel="stylesheet" type="text/css" href="css/table.css?v2">
+    <link rel="stylesheet" type="text/css" href="css/frames.css?v1">
+    <link rel="stylesheet" type="text/css" href="css/tabs.css?v1">
+    <script src="js/jquery-3.7.1.min.js"></script>
+    <script src="js/d3/d3.min.js"></script>
+</head>
+<style>
+    /* 样式用于创建多列布局 */
+    .column-container {
+        column-count: 3; /* 初始列数 */
+        column-gap: 20px; /* 列间距 */
+    }
+
+    /* 在小屏幕上设置列数为1 */
+    @media screen and (max-width: 600px) {
+        .column-container {
+            column-count: 1;
+        }
+    }
+
+    /* 可选的样式，使得标签与其对应的表单元素在同一行显示 */
+    label {
+        display: inline-block;
+        margin-bottom: 5px;
+    }
+
+    /* 让每个单选框在同一行显示 */
+    div.checkbox-item {
+        display: inline-block;
+        /*margin-right: 10px; !* 可选：增加一些右边距 *!*/
+    }
+</style>
+<body>
+<div class="container_16">
+    <div id="header" class="grid_16">
+        <h1>Group Control</h1>
+        <button type="button" name="refresh" class="refresh">Refresh</button>
+    </div>
+    <div id="menu" class="grid_2"></div>
+    <div id="main1" class="grid_14" >
+        <ul class="tab-list" style="align-content: center">
+            <h1 style="color: white"> Add Group Here </h1>
+        </ul>
+
+
+        <form>
+            <fieldset style="margin-bottom: 10px; margin-top: 10px">
+                <legend>Select a source node</legend>
+                <div id="radio-container"></div>
+            </fieldset>
+
+            <fieldset style="margin-bottom: 10px; margin-top: 10px">
+                <legend>Select destination nodes</legend>
+                <div id="checkbox-container"></div>
+            </fieldset>
+
+            <div class="formcontrol" style="margin-bottom: 10px; margin-top: 10px">
+                <input type="submit" value="Submit">
+                <input type="reset" value="Clear">
+            </div>
+        </form>
+
+
+    </div>
+    <div id="main2" class="grid_14"></div>
+</div>
+<script src="js/mainmenu.js"></script>
+<script src="js/common.js"></script>
+<script src="js/groupmodvalidate.js?v2"></script>
+<script src="js/multicastgrouptables.js?v2"></script>
+</body>
+</html>

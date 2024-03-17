@@ -389,7 +389,12 @@ function Tabs(category) {
         var tabs = '<ul class="tab-list">';
         for (var idx in keys) {
             var d = keys[idx];
-            var label = category === 'switches' ? 'SW_' + tab_labels[d] : tab_labels[d];
+            var label = tab_labels[d];
+            if (category === 'switches') {
+                label = 'SW_' + tab_labels[d];
+            } else if (category === 'multicast') {
+                label = 'Source Node ' + tab_labels[d];
+            }
             tabs += '<li class="tab-control" data-tab="tab-' + tab_labels[d] + '">' + label + '</li>';
         }
         tabs += '</ul>';
