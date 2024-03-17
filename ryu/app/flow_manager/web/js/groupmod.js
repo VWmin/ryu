@@ -74,7 +74,7 @@ $(function () {
           $field.on('change', on_action_change );
       } else if ($field.attr('name').includes('bucketaction')) {
           $field.on('change', on_action_change );
-      }      
+      }
       target.value = '-';
     } else if (e.target.value == '-') {
       $(target).parent().parent().remove();
@@ -186,6 +186,7 @@ $(function () {
 
   //var fillObj = FlowFill(addRaw);
 
+
   $('input[name="import"]').on("click", function(e) {
     var data = sessionStorage.getItem('group');
     var flow = JSON.parse(data);
@@ -195,5 +196,5 @@ $(function () {
   })
 
 
-  init_form();    
+  init_form();
 });

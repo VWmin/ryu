@@ -8,10 +8,43 @@ import cherrypy
 
 
 class MulticastInfo:
-    def __init__(self, s2r, src_to_group_no, src_to_group_ip):
+    b_req_lo, b_req_hi = 1, 2
+    d_req_lo, d_req_hi = 50, 100
+
+    def __init__(self, s2r):
         self.s2r = s2r
-        self.src_to_group_no = src_to_group_no
-        self.src_to_group_ip = src_to_group_ip
+        self.group_no = 1
+        self.src_to_group_no = {}
+        self.src_to_group_ip = {}
+        for s in self.s2r:
+            self.add_group(s)
+
+    def add_group(self, src):
+        self.src_to_group_no[src] = self.group_no
+        self.src_to_group_ip[src] = f'224.0.1.{self.src_to_group_no[src]}'
+        self.group_no += 1
+
+    @staticmethod
+    def random_bandwidth_limit_for_s_set(S):
+        return MulticastInfo.random_b_with_range(S, MulticastInfo.b_req_lo, MulticastInfo.b_req_hi)
+
+    @staticmethod
+    def random_delay_limit_for_s_set(S):
+        return MulticastInfo.random_d_with_range(S, MulticastInfo.d_req_lo, MulticastInfo.d_req_hi)
+
+    @staticmethod
+    def random_b_with_range(S, lo, hi):
+        B = {}
+        for s in S:
+            B[s] = round(random.uniform(lo, hi), 1)
+        return B
+
+    @staticmethod
+    def random_d_with_range(S, lo, hi):
+        D = {}
+        for s in S:
+            D[s] = random.uniform(lo, hi)
+        return D
 
 
 class GraphInfo:
@@ -22,9 +55,7 @@ class GraphInfo:
             self.graph.add_edge(edge[0] + 1, edge[1] + 1)
 
         b_lo, b_hi = 5, 10
-        b_req_lo, b_req_hi = 1, 2
         d_lo, d_hi = 1, 10
-        d_req_lo, d_req_hi = 50, 100
 
         random.seed(42)
 
@@ -32,8 +63,8 @@ class GraphInfo:
         add_attr_with_random_value(self.graph, "weight", d_lo, d_hi)
         self.S = random_s_from_graph(self.graph, 2)
         self.S2R = random_s2r_from_graph(self.graph, 3, self.S)
-        self.B = random_b_with_range(self.S, b_req_lo, b_req_hi)
-        self.D = random_d_with_range(self.S, d_req_lo, d_req_hi)
+        self.B = MulticastInfo.random_bandwidth_limit_for_s_set(self.S)
+        self.D = MulticastInfo.random_delay_limit_for_s_set(self.S)
 
         self.stp = False
 
@@ -58,7 +89,7 @@ class GraphInfo:
             self.src_to_group_no[s] = group_no
             group_no += 1
 
-        self.multicast_info = MulticastInfo(self.S2R, self.src_to_group_no, {s: self.src_to_group_ip(s) for s in self.S})
+        self.multicast_info = MulticastInfo(self.S2R)
 
         output = {
             "s2r": {},
@@ -74,8 +105,6 @@ class GraphInfo:
 
         with open('ev_setting.json', 'w') as json_file:
             json.dump(output, json_file, indent=4)
-
-
 
     def src_to_group_ip(self, src):
         return f'224.0.1.{self.src_to_group_no[src]}'
@@ -118,20 +147,6 @@ def set_random_bw(g, name, lo, hi):
     return tot
 
 
-def random_b_with_range(S, lo, hi):
-    B = {}
-    for s in S:
-        B[s] = round(random.uniform(lo, hi), 1)
-    return B
-
-
-def random_d_with_range(S, lo, hi):
-    D = {}
-    for s in S:
-        D[s] = random.uniform(lo, hi)
-    return D
-
-
 def random_s_from_graph(g: nx.Graph, number):
     ret = set()
     nodes = list(g.nodes)
@@ -168,6 +183,7 @@ class GraphInfoServer:
 
 if __name__ == "__main__":
     import random_graph
+
     g = random_graph.demo_graph()
     # graph = random_graph.gt_itm_ts(100)
     i = GraphInfo(g)

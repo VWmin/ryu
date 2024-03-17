@@ -216,6 +216,7 @@ class HeatDegreeModel:
         self._heat_base = HeatDegreeBase(self.g, self.delay_limit, self.bandwidth_require,
                                          self.src2recv, self.routing_trees, True)
         self.__routing__()
+        self.need_refactor = set()
 
     def __routing__(self):
         t1 = time.time()
@@ -243,6 +244,17 @@ class HeatDegreeModel:
         from ryu.app.distribution import random_graph
         random_graph.print_graph_with_labels(self.g, labels)
 
+    def update(self):
+        for to_refactor_s in self.need_refactor:
+            terminals = list(self.src2recv[to_refactor_s]) + [to_refactor_s]
+            # g = copy.deepcopy(self.g)
+            # g.remove_node(0)
+            g = self._heat_base.heat_graph(to_refactor_s)
+            ts = steinertree.steiner_tree(g, terminals)
+            self.routing_trees[to_refactor_s] = nx.DiGraph()
+            convert_routing_tree_to_digraph(ts, self.routing_trees[to_refactor_s], to_refactor_s, None)
+        self.need_refactor.clear()
+
     def add_recv(self, s, r):
         t1 = time.time()
         self.src2recv[s].add(r)
@@ -253,20 +265,11 @@ class HeatDegreeModel:
             if estimated <= self.delay_limit[s]:
                 self._heat_base.inc_relevance(s, u, v)
                 updated.add((u, v))
-        need_refactor = set()
         for u, v in updated:
             self._heat_base.heat[u][v] = self._heat_base.update_heat_degree_ij(u, v)
             for may_congested in self.src2recv:
                 if not self._heat_base.heat[u][v][2] and self._heat_base.is_routing_contains_edge(may_congested, u, v):
-                    need_refactor.add(may_congested)
-        for to_refactor_s in need_refactor:
-            terminals = list(self.src2recv[to_refactor_s]) + [to_refactor_s]
-            # g = copy.deepcopy(self.g)
-            # g.remove_node(0)
-            g = self._heat_base.heat_graph(to_refactor_s)
-            ts = steinertree.steiner_tree(g, terminals)
-            self.routing_trees[to_refactor_s] = nx.DiGraph()
-            convert_routing_tree_to_digraph(ts, self.routing_trees[to_refactor_s], to_refactor_s, None)
+                    self.need_refactor.add(may_congested)
         self.op_history.append(("add_recv", time.time() - t1))
 
     def remove_recv(self, s, r):

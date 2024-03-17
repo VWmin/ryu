@@ -29,7 +29,6 @@ from ryu.app.wsgi import WebSocketRPCServer
 from ryu.app.wsgi import route
 from ryu.app.wsgi import websocket
 
-
 PYTHON3 = sys.version_info > (3, 0)
 logger = logging.getLogger("flowmanager")
 
@@ -114,7 +113,7 @@ class WebApi(ControllerBase):
         r1 = requests.get("http://localhost:9002/links")
         r2 = requests.get("http://localhost:9002/switches")
         # res.json = self.ctrl_api.get_topology_data()
-        res.json = {"switches": json.loads(r2.content), "links": json.loads(r1.content), "hosts":  []}
+        res.json = {"switches": json.loads(r2.content), "links": json.loads(r1.content), "hosts": []}
         return res
 
     @route("monitor", "/multicasttrees", methods=["GET"])
@@ -147,6 +146,16 @@ class WebApi(ControllerBase):
         r2 = requests.get("http://localhost:9002/available_nodes")
         res.json = json.loads(r2.content)
         return res
+
+    @route("monitor", "/groupadd", methods=["POST"])
+    def group_add(self, req):
+        resp = requests.post("http://localhost:9002/group_add", json=req.json)
+        return self.form_response(resp.text)
+
+    @route("monitor", "/groupmod", methods=["POST"])
+    def group_mod(self, req):
+        resp = requests.post("http://localhost:9002/group_mod", json=req.json)
+        return self.form_response(resp.text)
 
     @route("monitor", "/logs", methods=["GET"])
     def get_logs(self, _):

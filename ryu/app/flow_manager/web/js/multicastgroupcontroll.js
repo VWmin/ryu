@@ -17,11 +17,20 @@
 $(function () {
     var tabsObj = new Tabs('multicast');
 
+    function displaySnackbar(msg) {
+        var $x = $("#snackbar");
+        $x.text(msg)
+        $x.toggleClass("show");
+        setTimeout(function () {
+            $x.toggleClass("show");
+        }, 3000);
+    }
+
 
     // Get flows data from swicthes
     function loadGroups() {
         expand_form();
-
+        register_group_add();
         getMulticastGroupData(
             function (src_list) {
                 tabsObj.buildTabs("#main2", src_list, "No Multicast groups to show!")
@@ -34,10 +43,12 @@ $(function () {
                             return a - b;
                         });
                         for (let i in src_list) {
-                            let $html_code = $('<form>\n' +
+                            let form_id = "group-mod-form-" + src_list[i]
+                            let container_id = "checkbox-container-" + src_list[i]
+                            let $html_code = $('<form id="' + form_id + '">\n' +
                                 '            <fieldset style="margin-bottom: 10px; margin-top: 10px">\n' +
                                 '                <legend>Update destination nodes</legend>\n' +
-                                '                <div id="checkbox-container-' + src_list[i] + '"></div>\n' +
+                                '                <div id="' + container_id + '"></div>\n' +
                                 '            </fieldset>\n' +
                                 '\n' +
                                 '            <div class="formcontrol" style="margin-bottom: 10px; margin-top: 10px">\n' +
@@ -46,7 +57,8 @@ $(function () {
                                 '            </div>\n' +
                                 '        </form>')
                             tabsObj.buildContent(src_list[i], $html_code)
-                            expand_checkbox_container("checkbox-container-" + src_list[i], available_dst, groups[src_list[i]])
+                            expand_checkbox_container(container_id, available_dst, groups[src_list[i]])
+                            register_group_mod(src_list[i], form_id, container_id)
                         }
                         tabsObj.setActive()
                     })
@@ -108,7 +120,7 @@ $(function () {
             .append("div")
             .attr("class", "checkbox-item")
             .html(function (d) {
-                return '<input type="radio" id="' + d + '" name="radio_group" value="' + d + '"><label for="' + d + '">' + d + '</label>';
+                return '<input type="radio" id="' + d + '" name=' + id + ' value="' + d + '"><label for="' + d + '">' + d + '</label>';
             });
     }
 
@@ -127,7 +139,7 @@ $(function () {
                 var isChecked = chosen.includes(d);
                 // 如果需要被选中，则设置 checked 属性
                 var checkedAttr = isChecked ? 'checked="checked"' : '';
-                return '<input type="checkbox" id="' + d + '" name="checkbox_group[]" value="' + d + '" ' + checkedAttr + '><label for="' + d + '">' + d + '</label>';
+                return '<input type="checkbox" id="' + d + '" name=' + id + ' value="' + d + '" ' + checkedAttr + '><label for="' + d + '">' + d + '</label>';
             });
     }
 
@@ -138,5 +150,78 @@ $(function () {
     })
 
     loadGroups();
+
+    function register_group_add() {
+        d3.select("#group-add-form")
+            .on("submit", function () {
+                d3.event.preventDefault();
+                var srcData = d3.selectAll("input[name='radio-container']:checked")
+                    .nodes()
+                    .map(function (node) {
+                        return parseInt(node.value);
+                    })
+
+                var dstsData = d3.selectAll("input[name='checkbox-container']:checked")
+                    .nodes()
+                    .map(function (node) {
+                        return parseInt(node.value);
+                    });
+
+                console.log(srcData);
+                console.log(dstsData);
+
+                // 在这里可以将数据提交到后端服务器处理，或者进行其他操作
+                if (srcData.length === 1 && dstsData.length !== 0) {
+                    const request_body = {"src": srcData[0], "dst": dstsData}
+                    $.post("/groupadd", JSON.stringify(request_body))
+                        .done(function (response) {
+                            displaySnackbar(response)
+                            setTimeout(function() {
+                                location.reload();
+                            }, 1000);
+                        })
+                        .fail(function () {
+                            displaySnackbar("No response from controller.");
+                        })
+                } else {
+                    displaySnackbar("INVALID ARGUMENTS!");
+                }
+            });
+    }
+
+
+    function register_group_mod(src, form_id, container_id) {
+        d3.select("#" + form_id)
+            .on("submit", function () {
+                d3.event.preventDefault();
+
+                var dstsData = d3.selectAll("input[name='" + container_id + "']:checked")
+                    .nodes()
+                    .map(function (node) {
+                        return parseInt(node.value);
+                    });
+
+                console.log(dstsData);
+
+                // 在这里可以将数据提交到后端服务器处理，或者进行其他操作
+                if (dstsData.length !== 0) {
+                    const request_body = {"src": parseInt(src), "dst": dstsData}
+                    $.post("/groupmod", JSON.stringify(request_body))
+                        .done(function (response) {
+                            displaySnackbar(response)
+                            setTimeout(function() {
+                                location.reload();
+                            }, 1000);
+                        })
+                        .fail(function () {
+                            displaySnackbar("No response from controller.");
+                        })
+                } else {
+                    displaySnackbar("INVALID ARGUMENTS!");
+                }
+            });
+
+    }
+
 
 })
