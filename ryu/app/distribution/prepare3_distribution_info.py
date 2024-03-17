@@ -119,7 +119,10 @@ class DistributionInfo:
         tmp_dpid2link = {(int(link["src"]["dpid"]), int(link["dst"]["dpid"])): link for link in self.swes_inter_links}
         for src, tree in self.routing_trees.items():
             swes = [tmp_dpid2sw[node] for node in tree.nodes]
-            links = [tmp_dpid2link[(u, v)] for u, v in tree.edges]
+            links = []
+            for u, v in tree.edges:
+                links.append(tmp_dpid2link[(u, v)])
+                links.append(tmp_dpid2link[(v, u)])
             trees[src] = {"switches": swes, "links": links, "hosts": []}
         return trees
 

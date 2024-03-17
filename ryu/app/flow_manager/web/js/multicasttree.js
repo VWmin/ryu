@@ -23,10 +23,6 @@ $(function () {
         .attr("class", "tooltip")
         .style("opacity", 0);
 
-    function add_prefix(obj) {
-        return String(obj).replace(/^0+/, "Switch_");
-    }
-
     function trim_zeros(obj) {
         return String(obj).replace(/^0+/, "");
     }
@@ -300,9 +296,9 @@ $(function () {
             },
             function (src_list, src_data) {
                 for (let i in src_list) {
-                    let $svg = $('<svg width="1116" height="600" id="svg' + i + '"></svg>');
+                    let $svg = $('<svg width="1116" height="600" id="svg' + src_list[i] + '"></svg>');
                     tabObj.buildContent(src_list[i], $svg);
-                    plotGraph(src_data[i], i);
+                    plotGraph(src_data[i], src_list[i]);
                 }
                 tabObj.setActive();
             }
@@ -317,7 +313,7 @@ $(function () {
                 for (let src in trees) {
                     if (trees.hasOwnProperty(src)) {
                         // console.log(src + ": " + trees[src]);
-                        src_list.push("source node " + src);
+                        src_list.push(src);
                         src_data.push(toGraph(trees[src]));
                     }
                 }
