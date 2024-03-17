@@ -16,12 +16,19 @@ $(function () {
   var path = window.location.pathname;
   var url  = window.location.href;
 
+  // var menu = '<div class="menuitem"> \
+  // <a href="index.html">Home</a> \
+  // <a href="flows.html">Flows</a> \
+  // <a href="groups.html">Groups</a> \
+  // <a href="groupform.html">Group Control</a> \
+  // <a href="topology.html">Topology</a> \
+  // <a href="multicasttree.html">Multicast Tree</a> \
+  // </div>'
   var menu = '<div class="menuitem"> \
-  <a href="index.html">Home</a> \
+  <a href="index.html">Topology</a> \
   <a href="flows.html">Flows</a> \
   <a href="groups.html">Groups</a> \
   <a href="groupform.html">Group Control</a> \
-  <a href="topology.html">Topology</a> \
   <a href="multicasttree.html">Multicast Tree</a> \
   </div>'
 
