@@ -31,12 +31,12 @@ function Tables(category) {
         var $col = $('<tr></tr>');
 
         // The rows in flow tables have checkboxes
-        if (category === 'flow') {
-            var $checkbox = $('<input type="checkbox" class="checkall"/>');
-            var $checktr = $('<th></th>').attr('data-sort', "nosort");
-            $checktr.append($checkbox);
-            $col.append($checktr);
-        }
+        // if (category === 'flow') {
+        //     var $checkbox = $('<input type="checkbox" class="checkall"/>');
+        //     var $checktr = $('<th></th>').attr('data-sort', "nosort");
+        //     $checktr.append($checkbox);
+        //     $col.append($checktr);
+        // }
 
         // Build the table header
         for (var i in table.fields) {
@@ -55,9 +55,9 @@ function Tables(category) {
         var rows = [];
         table.data.forEach(function (item) {
             var $row = $('<tr></tr>'); //.addClass('editable');
-            if (category === 'flow') {
-                $row.append($('<td><input type="checkbox" class="rowbox"/></td>'));
-            }
+            // if (category === 'flow') {
+            //     $row.append($('<td><input type="checkbox" class="rowbox"/></td>'));
+            // }
             item.dpid = dpid;
             for (var i in cols) {
                 var field = cols[i];
@@ -82,13 +82,13 @@ function Tables(category) {
 
         // The row's checkbox value will match the header's checkbox value.
         //if (typeof ($checkbox) !== "undefined") {
-        if ($checkbox) {
-            $checkbox.change(function () {
-                // Execlude hidden rows
-                //$(this).closest('table').find('tr').not('.hiddenrow').find('.rowbox').prop('checked', this.checked);
-                $(this).closest('table').find('.rowbox').prop('checked', this.checked);
-            });
-        }
+        // if ($checkbox) {
+        //     $checkbox.change(function () {
+        //         // Execlude hidden rows
+        //         //$(this).closest('table').find('tr').not('.hiddenrow').find('.rowbox').prop('checked', this.checked);
+        //         $(this).closest('table').find('.rowbox').prop('checked', this.checked);
+        //     });
+        // }
     }
 
 
@@ -169,7 +169,7 @@ function Tables(category) {
             var id = 'C' + dpid + '-' + dp_table.table_id;
             $container.attr('id', id)
 
-            var $menu = getMenu(dp_table);
+            // var $menu = getMenu(dp_table);
 
             // Add collapse button
             $hide = $('<button type="button" class="tablebtn"></button>');
@@ -179,14 +179,14 @@ function Tables(category) {
             $hide.on('click', function () {
                 $icon.toggleClass("icon-minimize icon-maximize");
                 $container.slideToggle('fast', function () {
-                    $menu.toggle($container.is(':visible'))
+                    // $menu.toggle($container.is(':visible'))
                     saveInSession("hidden", id, !$container.is(':visible'));
                 });
                 console.log($icon)
 
             })
             if (getFromSession("hidden", id)) {
-                $menu.toggle(false);
+                // $menu.toggle(false);
                 $container.toggle(false);
                 $icon.toggleClass("icon-minimize icon-maximize");
             };
@@ -222,7 +222,7 @@ function Tables(category) {
 
             $header.prepend($move);
             $header.prepend($hide);
-            $header.append($menu);
+            // $header.append($menu);
         }
 
         var $table = updateTable(dp_table);

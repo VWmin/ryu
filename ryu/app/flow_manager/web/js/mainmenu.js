@@ -25,11 +25,13 @@ $(function () {
   // <a href="multicasttree.html">Multicast Tree</a> \
   // </div>'
   var menu = '<div class="menuitem"> \
+  <h1> GLOBAL </h1> \
   <a href="index.html">Topology</a> \
-  <a href="flows.html">Flows</a> \
-  <a href="groups.html">Groups</a> \
   <a href="groupform.html">Group Control</a> \
   <a href="multicasttree.html">Multicast Tree</a> \
+  <h1> LOCAL </h1> \
+  <a href="flows.html">Flows</a> \
+  <a href="groups.html">Groups</a> \
   </div>'
 
 /*  <div class="topmenu"> \
