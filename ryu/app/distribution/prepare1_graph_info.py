@@ -185,7 +185,8 @@ if __name__ == "__main__":
     import random_graph
 
     # g = random_graph.demo_graph()
-    g= random_graph.gt_itm_ts(100)
+    # g= random_graph.gt_itm_ts(100)
+    g = random_graph.gt_itm_r(100)
     i = GraphInfo(g)
     # random_graph.print_graph(graph)
 

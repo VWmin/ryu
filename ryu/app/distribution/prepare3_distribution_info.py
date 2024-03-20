@@ -37,10 +37,10 @@ class DistributionInfo:
 
         for sw in _get_net_switches():
             dpid = sw["dpid"]
-            sw_info = {"dpid": dpid, "ports": []}
+            sw_info = {"dpid": dpid.lower(), "ports": []}
             for port in sw["ports"]:
                 port_no = switches.port_no_to_str(int(port["name"].split('eth')[-1]))
-                port_info = {"dpid": dpid, "port_no": port_no, "hw_addr": port["mac"], "name": port["name"]}
+                port_info = {"dpid": dpid.lower(), "port_no": port_no.lower(), "hw_addr": port["mac"], "name": port["name"]}
                 sw_info["ports"].append(port_info)
             self.swes.append(sw_info)
 
@@ -50,8 +50,8 @@ class DistributionInfo:
                 continue
             src_dpid, src_port_no = int(src_name[1:]), int(src_port_name.split('eth')[-1])
             dst_dpid, dst_port_no = int(dst_name[1:]), int(dst_port_name.split('eth')[-1])
-            src = {"dpid": switches.dpid_to_str(src_dpid), "port_no": switches.port_no_to_str(src_port_no), "hw_addr": src_port_mac, "name": src_name}
-            dst = {"dpid": switches.dpid_to_str(dst_dpid), "port_no": switches.port_no_to_str(dst_port_no), "hw_addr": dst_port_mac, "name": dst_name}
+            src = {"dpid": switches.dpid_to_str(src_dpid).lower(), "port_no": switches.port_no_to_str(src_port_no).lower(), "hw_addr": src_port_mac.lower(), "name": src_name}
+            dst = {"dpid": switches.dpid_to_str(dst_dpid).lower(), "port_no": switches.port_no_to_str(dst_port_no).lower(), "hw_addr": dst_port_mac.lower(), "name": dst_name}
             link = {"src": src, "dst": dst}
             link_rev = {"src": dst, "dst": src}
             self.swes_inter_links.append(link)
