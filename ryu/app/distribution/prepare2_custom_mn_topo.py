@@ -152,8 +152,9 @@ class MininetEnv:
         # Connect your switches to each other as defined in networkx graph
         for (n1, n2) in self.info.graph.edges:
             s_name_1, s_name_2 = f"s{n1}", f"s{n2}"
-            self.net.addLink(s_name_1, s_name_2, cls=TCLink,
-                             bw=self.info.graph[n1][n2]['bandwidth'], delay=f"{self.info.graph[n1][n2]['weight']}ms")
+            # self.net.addLink(s_name_1, s_name_2, cls=TCLink,bw=self.info.graph[n1][n2]['bandwidth'], delay=f"{self.info.graph[n1][n2]['weight']}ms")
+            self.net.addLink(s_name_1, s_name_2, cls=TCLink)
+
 
         info('*** Building network\n')
         self.net.build()

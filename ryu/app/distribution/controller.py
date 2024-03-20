@@ -74,8 +74,8 @@ class GUIServerApp(app_manager.RyuApp):
     def parse_links(links):
         dpid_to_port = {}
         for link in links:
-            src_dpid, src_port_no = int(link["src"]["dpid"]), int(link["src"]["port_no"])
-            dst_dpid, dst_port_no = int(link["dst"]["dpid"]), int(link["dst"]["port_no"])
+            src_dpid, src_port_no = int(link["src"]["dpid"], 16), int(link["src"]["port_no"], 16)
+            dst_dpid, dst_port_no = int(link["dst"]["dpid"], 16), int(link["dst"]["port_no"], 16)
             dpid_to_port[(src_dpid, dst_dpid)] = src_port_no
             dpid_to_port[(dst_dpid, src_dpid)] = dst_port_no
         return dpid_to_port

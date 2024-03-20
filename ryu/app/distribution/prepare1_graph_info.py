@@ -73,7 +73,7 @@ class GraphInfo:
         print(f"total bw is {self.total_bw}")
         print(f"bw requirement is {self.B}")
 
-        self.controller_number = 2
+        self.controller_number = 1
         self.cid_to_swes = {}
         self.sw_to_cid = {}
 
@@ -184,8 +184,8 @@ class GraphInfoServer:
 if __name__ == "__main__":
     import random_graph
 
-    g = random_graph.demo_graph()
-    # graph = random_graph.gt_itm_ts(100)
+    # g = random_graph.demo_graph()
+    g= random_graph.gt_itm_ts(100)
     i = GraphInfo(g)
     # random_graph.print_graph(graph)
 

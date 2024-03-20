@@ -9,8 +9,8 @@ from prepare1_graph_info import GraphInfo
 
 
 def main():
-    sys.argv.append('/home/vwmin/ryu/ryu/app/distribution/controller.py')
-    sys.argv.append('/home/vwmin/ryu/ryu/app/flow_manager/flowmanager.py')
+    sys.argv.append('/home/fwy/ryu/ryu/app/distribution/controller.py')
+    sys.argv.append('/home/fwy/flowmanager/flowmanager.py')
     # sys.argv.append('--verbose')
     sys.argv.append('--enable-debugger')
     sys.argv.append('--observe-links')

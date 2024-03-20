@@ -90,14 +90,14 @@ class DistributionInfo:
     def switches(self):
         swes = []
         for sw in self.swes:
-            if int(sw["dpid"]) in self.online_swes:
+            if int(sw["dpid"], 16) in self.online_swes:
                 swes.append(sw)
         return swes
 
     def links(self):
         links = []
         for link in self.swes_inter_links:
-            if int(link["src"]["dpid"]) in self.online_swes and int(link["dst"]["dpid"]) in self.online_swes:
+            if int(link["src"]["dpid"], 16) in self.online_swes and int(link["dst"]["dpid"], 16) in self.online_swes:
                 links.append(link)
         return links
 
@@ -120,8 +120,8 @@ class DistributionInfo:
 
     def all_trees(self):
         trees = {}  # {[src -> {switches: [], links: []}], ...}
-        tmp_dpid2sw = {int(sw["dpid"]): sw for sw in self.swes}
-        tmp_dpid2link = {(int(link["src"]["dpid"]), int(link["dst"]["dpid"])): link for link in self.swes_inter_links}
+        tmp_dpid2sw = {int(sw["dpid"], 16): sw for sw in self.swes}
+        tmp_dpid2link = {(int(link["src"]["dpid"], 16), int(link["dst"]["dpid"], 16)): link for link in self.swes_inter_links}
         for src, tree in self.routing_trees.items():
             swes = [tmp_dpid2sw[node] for node in tree.nodes]
             links = []
@@ -136,7 +136,7 @@ class DistributionInfo:
 
     def available_nodes(self):
         # ret: {available_src: [nodes], available_dst: [nodes]}
-        cur_nodes = [int(sw["dpid"]) for sw in self.swes]
+        cur_nodes = [int(sw["dpid"], 16) for sw in self.swes]
         available_src = []
         for n in cur_nodes:
             if n not in self.src_recvs:
