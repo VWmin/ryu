@@ -103,9 +103,16 @@ def gt_itm_r(n):
         return None
 
 
+def minial_graph():
+    g = nx.Graph()
+    g.add_edge(0, 1)
+    return g
+
+
 if __name__ == '__main__':
     print(gt_itm_ts(100))
     print(gt_itm_ts(175))
     print(gt_itm_ts(250))
     print(gt_itm_ts(325))
     print(gt_itm_ts(400))
+    print(minial_graph())
