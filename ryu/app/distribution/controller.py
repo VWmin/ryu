@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import pickle
@@ -95,9 +96,8 @@ class GUIServerApp(app_manager.RyuApp):
 
         self.lib = ctypes.cdll.LoadLibrary("./libDDSAPP.so")
         self.global_topo = {"controllers": [], "switches": [], "ports": [], "links": [], "hosts": []}
-        self.pub_time_info = {"switches": [], "ports": [], "links": [], "hosts": []}
-        self.sub_time_info = {"switches": [], "ports": [], "links": [], "hosts": []}
-        self.update_time_info = {"switches": [], "ports": [], "links": [], "hosts": []}
+        self.pub_time_info = {"switches": {}, "ports": {}, "links": {}, "hosts": {}}
+        self.sub_time_info = {"switches": {}, "ports": {}, "links": {}, "hosts": {}}
         self.switch_service = lookup_service_brick("switches")
         # 定义返回类型的数据类型
         self.lib.subscribeSwitchInfo.restype = StructSwitchInfo
@@ -121,6 +121,11 @@ class GUIServerApp(app_manager.RyuApp):
 
     def signal_handler(self, sig, frame):
         print(f"cid({self.controller_id}) exit")
+        with open(f'pub_time_info{self.controller_id}.json', 'w') as json_file:
+            json.dump(self.pub_time_info, json_file, indent=4)
+        with open(f'sub_time_info{self.controller_id}.json', 'w') as json_file:
+            json.dump(self.sub_time_info, json_file, indent=4)
+        print("dump time info ok.")
         hub.spawn(self.controller_leave)
 
     def controller_enter(self):
@@ -369,24 +374,27 @@ class GUIServerApp(app_manager.RyuApp):
     # publish all local topo for new connected controller
     def pub_topo(self):
         swes = get_switch(self)
+        t = time.time()
         for sw in swes:
             self.lib.publishSwitch(self.controller_id, sw.dp.id, len(sw.ports), True)
+            self.pub_time_info['switches'][sw.dp.id] = t
             for port in sw.ports:
                 version = bytes('v1.3', encoding='utf-8')
                 hw_addr = bytes(port.hw_addr, encoding="utf-8")
-                self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name,
-                                     port.is_live(), True)
+                self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name, port.is_live(), True)
+                self.pub_time_info['ports'][f'{port.dpid}-{port.port_no}'] = t
         links = get_link(self)
-        # print(links)
         for link in links:
+            key = f"{link.src.dpid}:{link.src.port_no}-{link.dst.dpid}:{link.dst.port_no}"
             self.lib.publishLink(link.src.dpid, link.src.port_no, link.dst.dpid, link.dst.port_no, True)
+            self.pub_time_info['links'][key] = t
         hosts = get_host(self)
-        # print(hosts)
         for host in hosts:
             mac = bytes(host.mac, encoding='utf-8')
             ipv4 = bytes(','.join(host.ipv4), encoding='utf-8')
             ipv6 = bytes(','.join(host.ipv6), encoding='utf-8')
             self.lib.publishHost(host.port.dpid, host.port.port_no, mac, ipv4, ipv6, True)
+            self.pub_time_info['hosts'][host.mac] = t
 
     # new data reader event from dds
     def new_controller_enter_threading(self):
@@ -406,9 +414,7 @@ class GUIServerApp(app_manager.RyuApp):
                 # sw enter
                 if switch_data.switch_info.operation:
                     identify = '.'.join(str(i) for i in switch_data.writer_info)
-                    temp_controller = {"identify": identify,
-                                       "c_id": switch_data.switch_info.controller_id,
-                                       "is_live": True}
+                    temp_controller = {"identify": identify, "c_id": switch_data.switch_info.controller_id, "is_live": True}
                     updated = False
                     for c in self.global_topo["controllers"]:
                         if c["c_id"] == temp_controller["c_id"]:
@@ -416,24 +422,25 @@ class GUIServerApp(app_manager.RyuApp):
                             updated = True
                     if not updated:
                         self.global_topo["controllers"].append(temp_controller)
-                    temp_switch = {"c_id": switch_data.switch_info.controller_id,
-                                   "dp_id": switch_data.switch_info.dp_id,
-                                   "port_num": switch_data.switch_info.port_num}
-                    # temp_switch={"c_id":switch_data.switch_info.controller_id, "dp_id":switch_data.switch_info.dp_id}
+                    temp_switch = {"c_id": switch_data.switch_info.controller_id, "dp_id": switch_data.switch_info.dp_id, "port_num": switch_data.switch_info.port_num}
                     if temp_switch not in self.global_topo["switches"]:
                         self.global_topo["switches"].append(temp_switch)
+                        self.sub_time_info["switches"][switch_data.switch_info.dp_id] = sub_time
                 # sw leave
                 else:
                     for i in range(len(self.global_topo["switches"])):
                         if switch_data.switch_info.dp_id == self.global_topo["switches"][i]["dp_id"]:
                             del self.global_topo["switches"][i]
+                            self.sub_time_info["switches"][switch_data.switch_info.dp_id] = sub_time
                             break
                     for port in reversed(self.global_topo["ports"]):
                         if switch_data.switch_info.dp_id == port["dp_id"]:
                             self.global_topo["ports"].remove(port)
+                            self.sub_time_info["ports"][f"{switch_data.switch_info.dp_id}-{port['port_no']}"] = sub_time
                     for host in reversed(self.global_topo["hosts"]):
                         if switch_data.switch_info.dp_id == host["dp_id"]:
                             self.global_topo["ports"].remove(host)
+                            self.sub_time_info["hosts"][host["mac"]] = sub_time
             time.sleep(0)
 
     def sub_port_threading(self):
@@ -450,6 +457,7 @@ class GUIServerApp(app_manager.RyuApp):
                     for i in range(len(self.global_topo["ports"])):
                         if self.global_topo["ports"][i]["dp_id"] == temp_port["dp_id"] and self.global_topo["ports"][i]["port_no"] == temp_port["port_no"]:
                             self.global_topo["ports"][i] = temp_port
+                            self.sub_time_info["ports"][f"{port_data.dp_id}-{port_data.port_no}"] = sub_time
                             break
 
                 elif port_data.operation == 0:
@@ -465,6 +473,8 @@ class GUIServerApp(app_manager.RyuApp):
                         if port_data.dp_id == host["dp_id"] and port_data.port_no == host["port_no"]:
                             self.global_topo["hosts"].remove(host)
                             break
+                    self.sub_time_info["ports"][f"{port_data.dp_id}-{port_data.port_no}"] = sub_time
+
                 elif port_data.operation == 1:
                     temp_port = {"dp_id": port_data.dp_id,
                                  "port_no": port_data.port_no,
@@ -476,6 +486,7 @@ class GUIServerApp(app_manager.RyuApp):
                                  "state": port_data.state}
                     if temp_port not in self.global_topo["ports"]:
                         self.global_topo["ports"].append(temp_port)
+                        self.sub_time_info["ports"][f"{port_data.dp_id}-{port_data.port_no}"] = sub_time
                         self.hw_addr_to_sw_port[temp_port["hw_addr"]] = f"{temp_port['dp_id']}-{temp_port['port_no']}"
             time.sleep(0)
 
@@ -486,11 +497,14 @@ class GUIServerApp(app_manager.RyuApp):
             if link_data.src_dp_id != 0:
                 temp_link = {"src_dp_id": link_data.src_dp_id, "src_port_no": link_data.src_port_no,
                              "dst_dp_id": link_data.dst_dp_id, "dst_port_no": link_data.dst_port_no}
+                key = f"{link_data.src_dp_id}:{link_data.src_port_no}-{link_data.dst_dp_id}:{link_data.dst_port_no}"
                 if link_data.operation:
                     if temp_link not in self.global_topo["links"]:
                         self.global_topo["links"].append(temp_link)
+                        self.sub_time_info["links"][key] = sub_time
                 else:
                     self.global_topo["links"].remove(temp_link)
+                    self.sub_time_info["links"][key] = sub_time
             time.sleep(0)
 
     def sub_host_threading(self):
@@ -499,71 +513,45 @@ class GUIServerApp(app_manager.RyuApp):
             sub_time = time.time()
             if host_data.dp_id != 0:
                 if host_data.operation:
-                    temp_host = {"dp_id": host_data.dp_id,
-                                 "port_no": host_data.port_no,
-                                 "mac": str(host_data.mac, encoding="utf-8"),
-                                 "ipv4": str(host_data.ipv4, encoding="utf-8"),
-                                 "ipv6": str(host_data.ipv6, encoding="utf-8")}
+                    temp_host = {"dp_id": host_data.dp_id, "port_no": host_data.port_no, "mac": str(host_data.mac, encoding="utf-8"), "ipv4": str(host_data.ipv4, encoding="utf-8"), "ipv6": str(host_data.ipv6, encoding="utf-8")}
                     if temp_host not in self.global_topo["hosts"]:
                         self.global_topo["hosts"].append(temp_host)
+                        self.sub_time_info['hosts'][temp_host['mac']] = sub_time
                         if temp_host["mac"] in self.hw_addr_to_sw_port:
                             dpid = int(self.hw_addr_to_sw_port[temp_host["mac"]].split('-')[0])
                             port = int(self.hw_addr_to_sw_port[temp_host["mac"]].split('-')[1])
-                            link = {"src_dp_id": dpid, "src_port_no": port,
-                                    "dst_dp_id": temp_host["dp_id"], "dst_port_no": temp_host["port_no"]}
-                            rev_link = {"dst_dp_id": dpid, "dst_port_no": port,
-                                        "src_dp_id": temp_host["dp_id"], "src_port_no": temp_host["port_no"]}
+                            link = {"src_dp_id": dpid, "src_port_no": port, "dst_dp_id": temp_host["dp_id"], "dst_port_no": temp_host["port_no"]}
+                            rev_link = {"dst_dp_id": dpid, "dst_port_no": port, "src_dp_id": temp_host["dp_id"], "src_port_no": temp_host["port_no"]}
                             self.global_topo['links'].append(link)
                             self.global_topo['links'].append(rev_link)
             time.sleep(0)
 
     @handler.set_ev_cls(event.EventSwitchEnter)
     def switch_enter_handler(self, ev):
-        # print(ev)
-        # print(ev.switch)
         LOG.debug(ev)
-        self.pub_time_info["switches"].append(time.time())
+        t = time.time()
+        self.pub_time_info["switches"][ev.switch.dp.id] = t
         self.lib.publishSwitch(self.controller_id, ev.switch.dp.id, len(ev.switch.ports), True)
-        # self.pub_time_info["switches"].append(time.time())
-        # switch_pub_time=time.time()
-        # self.logger.info("switch_pub_time: %s", switch_pub_time)
         for port in ev.switch.ports:
             version = bytes('v1.3', encoding='utf-8')
             hw_addr = bytes(port.hw_addr, encoding="utf-8")
             self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name,
                                  port.is_live(), True)
-            # port_pub_time=time.time()
-            self.pub_time_info["ports"].append(time.time())
-        # self.logger.info("port_pub_time: %s", port_pub_time)
-
-        # print("pub port")
+            self.pub_time_info["ports"][f"{port.dpid}-{port.port_no}"] = t
 
     @handler.set_ev_cls(event.EventSwitchLeave)
     def switch_leave_handler(self, ev):
-        self.pub_time_info["switches"].append(time.time())
-        self.lib.publishSwitch(self.controller_id, ev.switch.dp.id, len(ev.switch.ports), False)
-        # self.pub_time_info["switches"].append(time.time())
-        # switch_pub_time=time.time()
-        # self.logger.info("switch_leave_pub_time: %s", switch_pub_time)
-        # print("switch leave")
-        # print(ev.switch)
-        # print(ev)
         LOG.debug(ev)
+        self.pub_time_info["switches"][ev.switch.dp.id] = time.time()
+        self.lib.publishSwitch(self.controller_id, ev.switch.dp.id, len(ev.switch.ports), False)
 
     @handler.set_ev_cls(event.EventPortAdd)
     def port_add_handler(self, ev):
         port = ev.port
         version = bytes('v1.3', encoding='utf-8')
         hw_addr = bytes(port.hw_addr, encoding="utf-8")
-        self.pub_time_info["ports"].append(time.time())
-        self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name,
-                             port.is_live(), 1)
-        # self.pub_time_info["ports"].append(time.time())
-        # port_pub_time=time.time()
-        # self.logger.info("port_add_pub_time: %s", port_pub_time)
-
-        # print("port add ev")
-
+        self.pub_time_info["ports"][f'{port.dpid}-{port.port_no}'] = time.time()
+        self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name, port.is_live(), 1)
         LOG.debug(ev)
 
     @handler.set_ev_cls(event.EventPortDelete)
@@ -571,13 +559,8 @@ class GUIServerApp(app_manager.RyuApp):
         port = ev.port
         version = bytes('v1.3', encoding='utf-8')
         hw_addr = bytes(port.hw_addr, encoding="utf-8")
-        self.pub_time_info["ports"].append(time.time())
-        self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name,
-                             port.is_live(), 0)
-        # self.pub_time_info["ports"].append(time.time())
-        # port_pub_time=time.time()
-        # self.logger.info("port_delete_pub_time: %s", port_pub_time)
-        # print("port delete")
+        self.pub_time_info["ports"][f'{port.dpid}-{port.port_no}'] = time.time()
+        self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name, port.is_live(), 0)
         LOG.debug(ev)
 
     @handler.set_ev_cls(event.EventPortModify)
@@ -585,31 +568,22 @@ class GUIServerApp(app_manager.RyuApp):
         port = ev.port
         version = bytes('v1.3', encoding='utf-8')
         hw_addr = bytes(port.hw_addr, encoding="utf-8")
-        self.pub_time_info["ports"].append(time.time())
-        self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name,
-                             port.is_live(), 2)
-        # self.pub_time_info["ports"].append(time.time())
-        # port_pub_time=time.time()
-        # self.logger.info("port_modify_pub_time: %s", port_pub_time)
+        self.pub_time_info["ports"][f'{port.dpid}-{port.port_no}'] = time.time()
+        self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name, port.is_live(), 2)
         LOG.debug(ev)
 
     @handler.set_ev_cls(event.EventLinkAdd)
     def link_add_handler(self, ev):
-        self.pub_time_info["links"].append(time.time())
+        key = f"{ev.link.src.dpid}:{ev.link.src.port_no}-{ev.link.dst.dpid}:{ev.link.dst.port_no}"
+        self.pub_time_info["links"][key] = time.time()
         self.lib.publishLink(ev.link.src.dpid, ev.link.src.port_no, ev.link.dst.dpid, ev.link.dst.port_no, True)
-        # self.pub_time_info["links"].append(time.time())
-        # pub_time=time.time()
-        # self.logger.info("link_add_pub_time: %s", pub_time)
-        # print(ev)
         LOG.debug(ev)
 
     @handler.set_ev_cls(event.EventLinkDelete)
     def link_del_handler(self, ev):
-        self.pub_time_info["links"].append(time.time())
+        key = f"{ev.link.src.dpid}:{ev.link.src.port_no}-{ev.link.dst.dpid}:{ev.link.dst.port_no}"
+        self.pub_time_info["links"][key] = time.time()
         self.lib.publishLink(ev.link.src.dpid, ev.link.src.port_no, ev.link.dst.dpid, ev.link.dst.port_no, False)
-        # self.pub_time_info["links"].append(time.time())
-        # pub_time=time.time()
-        # self.logger.info("link_delete_pub_time: %s", pub_time)
         LOG.debug(ev)
 
     @handler.set_ev_cls(event.EventHostAdd)
@@ -617,13 +591,9 @@ class GUIServerApp(app_manager.RyuApp):
         mac = bytes(ev.host.mac, encoding='utf-8')
         ipv4 = bytes(','.join(ev.host.ipv4), encoding='utf-8')
         ipv6 = bytes(','.join(ev.host.ipv6), encoding='utf-8')
-        # print(ev)
-        self.pub_time_info["hosts"].append(time.time())
+        self.pub_time_info["hosts"][ev.host.mac] = time.time()
         self.lib.publishHost(ev.host.port.dpid, ev.host.port.port_no, mac, ipv4, ipv6, True)
-        # self.pub_time_info["hosts"].append(time.time())
         LOG.debug(ev)
-        # pub_time=time.time()
-        # self.logger.info("host_add_pub_time: %s", pub_time)
 
     @handler.set_ev_cls(event.EventHostMove)
     def host_move_handler(self, ev):
@@ -634,7 +604,6 @@ class GUIServerApp(app_manager.RyuApp):
     def host_delete_handler(self, ev):
         print("host delete")
         # print(ev.host)
-        # self.lib.publishHost(ev.host.port.dpid, ev.host.port.port_no, mac, ipv4, ipv6, False)
 
 
 # app_manager.require_app('ryu.app.rest_topology')
