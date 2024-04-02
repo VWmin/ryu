@@ -195,5 +195,5 @@ if __name__ == "__main__":
     i = GraphInfo(g)
     # random_graph.print_graph(graph)
 
-    cherrypy.config.update({'server.socket_port': 9000})
+    cherrypy.config.update({'server.socket_host': "0.0.0.0", 'server.socket_port': 9000})
     cherrypy.quickstart(GraphInfoServer(i))

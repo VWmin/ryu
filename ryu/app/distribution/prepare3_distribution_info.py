@@ -252,5 +252,5 @@ class DistributionServer:
 if __name__ == '__main__':
     gi = _get_exp_info()
     di = DistributionInfo(gi)
-    cherrypy.config.update({'server.socket_port': 9002})
+    cherrypy.config.update({'server.socket_host': "0.0.0.0", 'server.socket_port': 9002})
     cherrypy.quickstart(DistributionServer(di))

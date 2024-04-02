@@ -195,7 +195,7 @@ class MininetEnv:
 
     def run_exp_exec_server(self):
         print("run exp exec server")
-        cherrypy.config.update({'server.socket_port': 9001})
+        cherrypy.config.update({'server.socket_host': "0.0.0.0", 'server.socket_port': 9001})
         cherrypy.quickstart(ExpExecServer(self.info, self.net))
 
     def ping_connectivity(self):
