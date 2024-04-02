@@ -8,6 +8,7 @@ import ctypes
 
 from ctypes import *
 
+import cherrypy
 import requests
 
 from ryu.app.distribution.web_app import GUIServerController
@@ -77,6 +78,7 @@ class GUIServerApp(app_manager.RyuApp):
 
     def __init__(self, *args, **kwargs):
         super(GUIServerApp, self).__init__(*args, **kwargs)
+        time.sleep(3)
         # wsgi = kwargs['wsgi']
         # wsgi.register(GUIServerController)
         # mine
@@ -89,6 +91,9 @@ class GUIServerApp(app_manager.RyuApp):
         self.controller_id = self.CONF.controller_id
         self.controller_enter()
         self.dpid_to_port = GUIServerApp.parse_links(_get_all_links())
+        self.update_time_info = []
+        self.server_thr = hub.spawn(self.run_server)
+
 
         # route
         # self.query_trees_thr = hub.spawn(self.query_trees)
@@ -121,10 +126,12 @@ class GUIServerApp(app_manager.RyuApp):
 
     def signal_handler(self, sig, frame):
         print(f"cid({self.controller_id}) exit")
-        with open(f'pub_time_info{self.controller_id}.json', 'w') as json_file:
-            json.dump(self.pub_time_info, json_file, indent=4)
-        with open(f'sub_time_info{self.controller_id}.json', 'w') as json_file:
-            json.dump(self.sub_time_info, json_file, indent=4)
+        # with open(f'pub_time_info{self.controller_id}.json', 'w') as json_file:
+        #     json.dump(self.pub_time_info, json_file, indent=4)
+        # with open(f'sub_time_info{self.controller_id}.json', 'w') as json_file:
+        #     json.dump(self.sub_time_info, json_file, indent=4)
+        with open(f'update_time_info{self.controller_id}.json', 'w') as json_file:
+            json.dump(self.update_time_info, json_file, indent=4)
         print("dump time info ok.")
         hub.spawn(self.controller_leave)
 
@@ -143,6 +150,24 @@ class GUIServerApp(app_manager.RyuApp):
             dpid_to_port[(src_dpid, dst_dpid)] = src_port_no
             dpid_to_port[(dst_dpid, src_dpid)] = dst_port_no
         return dpid_to_port
+
+    @cherrypy.expose
+    def update(self, t1):
+        t2 = time.time()
+        t1 = float(t1)
+        print(t2 - t1)
+        self.update_time_info.append(t2 - t1)
+
+    def send_update(self):
+        for i in range(1, 2 + 1):
+            if i == self.controller_id:
+                continue
+            t1 = time.time()
+            requests.get(f"http://localhost:{10000 + i}/update?t1={t1}")
+
+    def run_server(self):
+        cherrypy.config.update({'server.socket_port': 10000 + self.controller_id})
+        cherrypy.quickstart(self)
 
     @set_ev_cls(ofp_event.EventOFPErrorMsg, [HANDSHAKE_DISPATCHER, CONFIG_DISPATCHER, MAIN_DISPATCHER])
     def error_msg_handler(self, ev):
@@ -378,16 +403,19 @@ class GUIServerApp(app_manager.RyuApp):
         for sw in swes:
             self.lib.publishSwitch(self.controller_id, sw.dp.id, len(sw.ports), True)
             self.pub_time_info['switches'][sw.dp.id] = t
+            self.send_update()
             for port in sw.ports:
                 version = bytes('v1.3', encoding='utf-8')
                 hw_addr = bytes(port.hw_addr, encoding="utf-8")
                 self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name, port.is_live(), True)
                 self.pub_time_info['ports'][f'{port.dpid}-{port.port_no}'] = t
+                self.send_update()
         links = get_link(self)
         for link in links:
             key = f"{link.src.dpid}:{link.src.port_no}-{link.dst.dpid}:{link.dst.port_no}"
             self.lib.publishLink(link.src.dpid, link.src.port_no, link.dst.dpid, link.dst.port_no, True)
             self.pub_time_info['links'][key] = t
+            self.send_update()
         hosts = get_host(self)
         for host in hosts:
             mac = bytes(host.mac, encoding='utf-8')
@@ -395,6 +423,7 @@ class GUIServerApp(app_manager.RyuApp):
             ipv6 = bytes(','.join(host.ipv6), encoding='utf-8')
             self.lib.publishHost(host.port.dpid, host.port.port_no, mac, ipv4, ipv6, True)
             self.pub_time_info['hosts'][host.mac] = t
+            self.send_update()
 
     # new data reader event from dds
     def new_controller_enter_threading(self):
@@ -531,6 +560,7 @@ class GUIServerApp(app_manager.RyuApp):
         LOG.debug(ev)
         t = time.time()
         self.pub_time_info["switches"][ev.switch.dp.id] = t
+        self.send_update()
         self.lib.publishSwitch(self.controller_id, ev.switch.dp.id, len(ev.switch.ports), True)
         for port in ev.switch.ports:
             version = bytes('v1.3', encoding='utf-8')
@@ -538,11 +568,13 @@ class GUIServerApp(app_manager.RyuApp):
             self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name,
                                  port.is_live(), True)
             self.pub_time_info["ports"][f"{port.dpid}-{port.port_no}"] = t
+            self.send_update()
 
     @handler.set_ev_cls(event.EventSwitchLeave)
     def switch_leave_handler(self, ev):
         LOG.debug(ev)
         self.pub_time_info["switches"][ev.switch.dp.id] = time.time()
+        self.send_update()
         self.lib.publishSwitch(self.controller_id, ev.switch.dp.id, len(ev.switch.ports), False)
 
     @handler.set_ev_cls(event.EventPortAdd)
@@ -551,6 +583,7 @@ class GUIServerApp(app_manager.RyuApp):
         version = bytes('v1.3', encoding='utf-8')
         hw_addr = bytes(port.hw_addr, encoding="utf-8")
         self.pub_time_info["ports"][f'{port.dpid}-{port.port_no}'] = time.time()
+        self.send_update()
         self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name, port.is_live(), 1)
         LOG.debug(ev)
 
@@ -560,6 +593,7 @@ class GUIServerApp(app_manager.RyuApp):
         version = bytes('v1.3', encoding='utf-8')
         hw_addr = bytes(port.hw_addr, encoding="utf-8")
         self.pub_time_info["ports"][f'{port.dpid}-{port.port_no}'] = time.time()
+        self.send_update()
         self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name, port.is_live(), 0)
         LOG.debug(ev)
 
@@ -569,6 +603,7 @@ class GUIServerApp(app_manager.RyuApp):
         version = bytes('v1.3', encoding='utf-8')
         hw_addr = bytes(port.hw_addr, encoding="utf-8")
         self.pub_time_info["ports"][f'{port.dpid}-{port.port_no}'] = time.time()
+        self.send_update()
         self.lib.publishPort(port.dpid, version, port._config, port._state, port.port_no, hw_addr, port.name, port.is_live(), 2)
         LOG.debug(ev)
 
@@ -576,6 +611,7 @@ class GUIServerApp(app_manager.RyuApp):
     def link_add_handler(self, ev):
         key = f"{ev.link.src.dpid}:{ev.link.src.port_no}-{ev.link.dst.dpid}:{ev.link.dst.port_no}"
         self.pub_time_info["links"][key] = time.time()
+        self.send_update()
         self.lib.publishLink(ev.link.src.dpid, ev.link.src.port_no, ev.link.dst.dpid, ev.link.dst.port_no, True)
         LOG.debug(ev)
 
@@ -583,6 +619,7 @@ class GUIServerApp(app_manager.RyuApp):
     def link_del_handler(self, ev):
         key = f"{ev.link.src.dpid}:{ev.link.src.port_no}-{ev.link.dst.dpid}:{ev.link.dst.port_no}"
         self.pub_time_info["links"][key] = time.time()
+        self.send_update()
         self.lib.publishLink(ev.link.src.dpid, ev.link.src.port_no, ev.link.dst.dpid, ev.link.dst.port_no, False)
         LOG.debug(ev)
 
@@ -592,6 +629,7 @@ class GUIServerApp(app_manager.RyuApp):
         ipv4 = bytes(','.join(ev.host.ipv4), encoding='utf-8')
         ipv6 = bytes(','.join(ev.host.ipv6), encoding='utf-8')
         self.pub_time_info["hosts"][ev.host.mac] = time.time()
+        self.send_update()
         self.lib.publishHost(ev.host.port.dpid, ev.host.port.port_no, mac, ipv4, ipv6, True)
         LOG.debug(ev)
 
