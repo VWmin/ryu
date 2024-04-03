@@ -93,7 +93,7 @@ class GUIServerApp(app_manager.RyuApp):
         self.dpid_to_port = GUIServerApp.parse_links(_get_all_links())
         self.update_time_info = []
         self.server_thr = hub.spawn(self.run_server)
-
+        self.server_time = time.time()
 
         # route
         # self.query_trees_thr = hub.spawn(self.query_trees)
@@ -121,6 +121,8 @@ class GUIServerApp(app_manager.RyuApp):
         self.controller_id = self.CONF.controller_id
         self.topo_file = f"topo-{self.controller_id}.json"
         self.hw_addr_to_sw_port = {}  # hw_addr(str) -> sw-port(str)
+        # self.heat_beat_thr = hub.spawn(self.heat_beat_update)
+        self.heatbeat_dds_thr = hub.spawn(self.heartbeat_by_dds)
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
@@ -130,8 +132,9 @@ class GUIServerApp(app_manager.RyuApp):
         #     json.dump(self.pub_time_info, json_file, indent=4)
         # with open(f'sub_time_info{self.controller_id}.json', 'w') as json_file:
         #     json.dump(self.sub_time_info, json_file, indent=4)
-        with open(f'update_time_info{self.controller_id}.json', 'w') as json_file:
-            json.dump(self.update_time_info, json_file, indent=4)
+        with open(f'update_time_info{self.controller_id}', 'w') as f:
+            for t1, t2 in self.update_time_info:
+                f.write(f"{t1}, {t2}\n")
         print("dump time info ok.")
         hub.spawn(self.controller_leave)
 
@@ -156,7 +159,12 @@ class GUIServerApp(app_manager.RyuApp):
         t2 = time.time()
         t1 = float(t1)
         print(t2 - t1)
-        self.update_time_info.append(t2 - t1)
+        self.update_time_info.append((t2 - self.server_time, t2 - t1))
+
+    def heat_beat_update(self):
+        while self.is_active:
+            self.send_update()
+            time.sleep(1)
 
     def send_update(self):
         for i in range(1, 2 + 1):
@@ -424,6 +432,13 @@ class GUIServerApp(app_manager.RyuApp):
             self.lib.publishHost(host.port.dpid, host.port.port_no, mac, ipv4, ipv6, True)
             self.pub_time_info['hosts'][host.mac] = t
             self.send_update()
+
+    def heartbeat_by_dds(self):
+        while self.is_active:
+            tmp = bytes("00:00:00:00:00:00", encoding='utf-8')
+            self.lib.publishHost(0, 0, tmp, tmp, tmp, True)
+            self.send_update()
+            time.sleep(1)
 
     # new data reader event from dds
     def new_controller_enter_threading(self):
