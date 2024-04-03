@@ -155,7 +155,6 @@ class MininetEnv:
             # self.net.addLink(s_name_1, s_name_2, cls=TCLink,bw=self.info.graph[n1][n2]['bandwidth'], delay=f"{self.info.graph[n1][n2]['weight']}ms")
             self.net.addLink(s_name_1, s_name_2, cls=TCLink)
 
-
         info('*** Building network\n')
         self.net.build()
 
@@ -176,7 +175,12 @@ class MininetEnv:
     def start(self):
         # self.net.start()
 
-        threads = [threading.Thread(target=self.run_mn_cli), threading.Thread(target=self.run_exp_exec_server)]
+        threads = [
+            threading.Thread(target=self.run_mn_cli),
+            threading.Thread(target=self.run_exp_exec_server),
+            threading.Thread(target=self.change_network)
+        ]
+
         if self.info.stp:
             threads.append(threading.Thread(target=self.ping_connectivity))
 
@@ -210,6 +214,27 @@ class MininetEnv:
                 connected = True
         t2 = time.time()
         print(f"cost: {t2 - t1}")
+
+    def change_network(self):
+        time.sleep(15)
+        random.seed(42)
+        up_links = [link for link in self.net.links]
+        down_links = []
+        while True:
+            i = random.randint(1, 2)
+            if i == 1 and up_links:
+                link = random.choice(up_links)
+                up_links.remove(link)
+                down_links.append(link)
+                self.net.configLinkStatus(link.intf1.node.name, link.intf2.node.name, 'down')
+                print(f"Disconnected {link.intf1.node.name} and {link.intf2.node.name}")
+            if i == 2 and down_links:
+                link = random.choice(down_links)
+                down_links.remove(link)
+                up_links.append(link)
+                self.net.configLinkStatus(link.intf1.node.name, link.intf2.node.name, 'up')
+                print(f"Reconnected {link.intf1.node.name} and {link.intf2.node.name}")
+            time.sleep(10)
 
 
 if __name__ == '__main__':
