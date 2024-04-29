@@ -61,8 +61,8 @@ class GraphInfo:
 
         self.total_bw = set_random_bw(self.graph, "bandwidth", b_lo, b_hi)
         add_attr_with_random_value(self.graph, "weight", d_lo, d_hi)
-        self.S = random_s_from_graph(self.graph, 1)
-        self.S2R = random_s2r_from_graph(self.graph, 1, self.S)
+        self.S = random_s_from_graph(self.graph, 2)
+        self.S2R = random_s2r_from_graph(self.graph, 3, self.S)
         self.B = MulticastInfo.random_bandwidth_limit_for_s_set(self.S)
         self.D = MulticastInfo.random_delay_limit_for_s_set(self.S)
 
@@ -73,7 +73,7 @@ class GraphInfo:
         print(f"total bw is {self.total_bw}")
         print(f"bw requirement is {self.B}")
 
-        self.controller_number = 2
+        self.controller_number = 4
         self.cid_to_swes = {}
         self.sw_to_cid = {}
 
@@ -188,8 +188,8 @@ class GraphInfoServer:
 if __name__ == "__main__":
     import random_graph
 
-    # g = random_graph.demo_graph()
-    g = random_graph.minial_graph()
+    g = random_graph.demo_graph()
+    # g = random_graph.minial_graph()
     # g= random_graph.gt_itm_ts(100)
     # g = random_graph.gt_itm_r(100)
     i = GraphInfo(g)

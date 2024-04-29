@@ -63,6 +63,10 @@ def _get_exp_info() -> GraphInfo:
     return pickle.loads(response.content)
 
 
+def _start_exp():
+    requests.get("http://localhost:9001/exec")
+
+
 def _get_all_links():
     response = requests.get("http://localhost:9002/all_links")
     return pickle.loads(response.content)
@@ -96,7 +100,7 @@ class GUIServerApp(app_manager.RyuApp):
         self.server_time = time.time()
 
         # route
-        # self.query_trees_thr = hub.spawn(self.query_trees)
+        self.query_trees_thr = hub.spawn(self.query_trees)
         self.node_installed_entries = set()
 
         self.lib = ctypes.cdll.LoadLibrary("./libDDSAPP.so")
@@ -317,13 +321,17 @@ class GUIServerApp(app_manager.RyuApp):
 
     def query_trees(self):
         hub.sleep(20)
+        started = False
         while self.is_active:
             print("querying latest routing trees >> ")
             response = requests.get(f"http://localhost:9002/trees?cid={self.controller_id}")
             trees, multicast_info = pickle.loads(response.content)
             print(f"\ttrees: {trees}, multicast info: {multicast_info}")
             self.install_routing_trees(trees, multicast_info)
-            hub.sleep(5)
+            if self.controller_id == 1 and not started:
+                _start_exp()
+                started = True
+            hub.sleep(12)
 
     def clear_entries(self, routing_trees, info: MulticastInfo):
         for src, tree in routing_trees.items():

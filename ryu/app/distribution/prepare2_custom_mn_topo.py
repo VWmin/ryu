@@ -44,8 +44,8 @@ class ExpExecServer:
 
     @cherrypy.expose
     def exec(self):
-        self.run_script()
-        time.sleep(15)
+        # self.run_script()
+        # time.sleep(15)
         self.run_iperf()
 
     @cherrypy.expose
@@ -178,7 +178,7 @@ class MininetEnv:
         threads = [
             threading.Thread(target=self.run_mn_cli),
             threading.Thread(target=self.run_exp_exec_server),
-            threading.Thread(target=self.change_network)
+            # threading.Thread(target=self.change_network)
         ]
 
         if self.info.stp:
