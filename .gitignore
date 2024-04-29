@@ -23,3 +23,6 @@ ryu/app/distribution/topo-*.json
 ryu/app/distribution/zrddslicence.lic
 ryu/app/distribution/graphs
 ryu/app/distribution/ev_setting.json
+
+ryu/app/mobility/taxi_february.txt
+ryu/app/mobility/ev_setting.json
