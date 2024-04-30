@@ -175,6 +175,8 @@ def random_s2r_from_graph(g: nx.Graph, number, src_set):
 
 
 class GraphInfoServer:
+    is_latest = False
+    g = None
     def __init__(self, info):
         self.info = info
 
@@ -182,16 +184,27 @@ class GraphInfoServer:
     def exp_info(self):
         return pickle.dumps(self.info)
 
+    @cherrypy.expose
+    def latest_graph(self):
+        if not GraphInfoServer.is_latest:
+            return pickle.dumps((False, None))
+        else:
+            GraphInfoServer.is_latest = False
+            return pickle.dumps((True, GraphInfoServer.g))
 
-def update_graph(start_dt, cid_to_node, limit, cab_data, pre_g):
-    time.sleep(3)
-    while True:
-        start_dt = start_dt + timedelta(seconds=24)  # exp will cost 5min
-        g = read_data.query_trace(cab_data, start_dt, cid_to_node, limit)
-        if not networkx.is_isomorphic(g, pre_g):
-            plt_g(g)
-        pre_g = g
+    @staticmethod
+    def update_graph(start_dt, cid_to_node, limit, cab_data, pre_g):
         time.sleep(3)
+        while True:
+            start_dt = start_dt + timedelta(seconds=24)  # exp will cost 5min
+            cur_g = read_data.query_trace(cab_data, start_dt, cid_to_node, limit)
+            if not networkx.is_isomorphic(cur_g, pre_g):
+                GraphInfoServer.is_latest = True
+                GraphInfoServer.g = cur_g
+                pre_g = cur_g
+                # plt_g(g)
+                print(f"graph updated at {start_dt}")
+            time.sleep(3)
 
 
 def plt_g(g):
@@ -219,7 +232,7 @@ if __name__ == "__main__":
         cherrypy.quickstart(GraphInfoServer(i))
 
 
-    t = threading.Thread(target=update_graph, args=(start_dt, cid_to_node, limit, cab_data, g))
+    t = threading.Thread(target=GraphInfoServer.update_graph, args=(start_dt, cid_to_node, limit, cab_data, g))
     t2 = threading.Thread(target=runserver)
 
     t.start()

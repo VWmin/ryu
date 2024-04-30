@@ -252,8 +252,14 @@ def main():
     limit = 3000
     g1 = gen_g([(k, v[0], v[1]) for k, v in trace_slice1.items()], limit, cid_to_node)
     # g2 = gen_g([(k, v[0], v[1]) for k, v in trace_slice2.items()], limit)
-    # g3 = gen_g([(k, v[0], v[1]) for k, v in trace_slice3.items()], limit)
-    print(g1.nodes, g1.edges)
+    g3 = gen_g([(k, v[0], v[1]) for k, v in trace_slice3.items()], limit, cid_to_node)
+
+    cur_links = set(g1.edges)
+    next_links = set(g3.edges)
+    link_down_set = cur_links - next_links  # link down
+    link_up_set = next_links - cur_links  # link up
+    cur_links = next_links
+
 
     return g1
 

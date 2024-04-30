@@ -38,15 +38,16 @@ def int_to_ip_address(number: int):
 
 # outside access to mininet
 class ExpExecServer:
-    def __init__(self, info, net):
+    def __init__(self, info, net, topo_lock):
         self.info = info
         self.net = net
+        self.topo_lock = topo_lock
 
     @cherrypy.expose
     def exec(self):
-        # self.run_script()
+        self.run_script()
         # time.sleep(15)
-        self.run_iperf()
+        # self.run_iperf()
 
     @cherrypy.expose
     def switches(self):
@@ -66,6 +67,7 @@ class ExpExecServer:
     def links(self):
         links = []
 
+        self.topo_lock.acquire()
         for link in self.net.links:
             src = link.intf1.node.name
             src_port = link.intf1.name
@@ -74,7 +76,7 @@ class ExpExecServer:
             dst_port = link.intf2.name
             dst_mac = link.intf2.MAC()
             links.append((src, src_port, src_mac, dst, dst_port, dst_mac))
-
+        self.topo_lock.release()
         return pickle.dumps(links)
 
     def run_script(self):
@@ -108,6 +110,11 @@ def _get_exp_info() -> GraphInfo:
     return pickle.loads(response.content)
 
 
+def _get_latest_graph():
+    response = requests.get("http://localhost:9000/latest_graph")
+    return pickle.loads(response.content)
+
+
 # run mininet
 class MininetEnv:
     # Rate limit links to 10Mbps
@@ -119,6 +126,7 @@ class MininetEnv:
         self.net = Mininet(topo=None, build=False)
         self.controllers = {}  # cid -> controller
         self.build_net()
+        self.topo_lock = threading.Lock()
         signal.signal(signal.SIGINT, self.signal_handler)
 
     def build_net(self):
@@ -152,8 +160,8 @@ class MininetEnv:
         # Connect your switches to each other as defined in networkx graph
         for (n1, n2) in self.info.graph.edges:
             s_name_1, s_name_2 = f"s{n1}", f"s{n2}"
-            self.net.addLink(s_name_1, s_name_2, cls=TCLink,bw=self.info.graph[n1][n2]['bandwidth'], delay=f"{self.info.graph[n1][n2]['weight']}ms")
-            # self.net.addLink(s_name_1, s_name_2, cls=TCLink)
+            # self.net.addLink(s_name_1, s_name_2, cls=TCLink, bw=self.info.graph[n1][n2]['bandwidth'], delay=f"{self.info.graph[n1][n2]['weight']}ms")
+            self.net.addLink(s_name_1, s_name_2, cls=TCLink)
 
         info('*** Building network\n')
         self.net.build()
@@ -200,7 +208,7 @@ class MininetEnv:
     def run_exp_exec_server(self):
         print("run exp exec server")
         cherrypy.config.update({'server.socket_host': "0.0.0.0", 'server.socket_port': 9001})
-        cherrypy.quickstart(ExpExecServer(self.info, self.net))
+        cherrypy.quickstart(ExpExecServer(self.info, self.net, self.topo_lock))
 
     def ping_connectivity(self):
         hosts_to_ping = random.sample(self.info.S2R[random.choice(list(self.info.S))], 2)
@@ -216,25 +224,26 @@ class MininetEnv:
         print(f"cost: {t2 - t1}")
 
     def change_network(self):
-        time.sleep(15)
-        # random.seed(42)
-        # up_links = [link for link in self.net.links]
-        # down_links = []
-        # while True:
-        #     i = random.randint(1, 2)
-        #     if i == 1 and up_links:
-        #         link = random.choice(up_links)
-        #         up_links.remove(link)
-        #         down_links.append(link)
-        #         self.net.configLinkStatus(link.intf1.node.name, link.intf2.node.name, 'down')
-        #         print(f"Disconnected {link.intf1.node.name} and {link.intf2.node.name}")
-        #     if i == 2 and down_links:
-        #         link = random.choice(down_links)
-        #         down_links.remove(link)
-        #         up_links.append(link)
-        #         self.net.configLinkStatus(link.intf1.node.name, link.intf2.node.name, 'up')
-        #         print(f"Reconnected {link.intf1.node.name} and {link.intf2.node.name}")
-        #     time.sleep(10)
+        time.sleep(3)
+        cur_links = set(self.info.graph.edges)
+        while True:
+            latest, g = _get_latest_graph()
+            if latest:
+                next_links = set(g.edges)
+                link_down_set = cur_links - next_links  # link down
+                link_up_set = next_links - cur_links  # link up
+
+                self.topo_lock.acquire()
+                for link in link_down_set:
+                    self.net.delLinkBetween(self.net.get(f"s{link[0]}"), self.net.get(f"s{link[1]}"), allLinks=True)
+                    print(f"Disconnected s{link[0]} and s{link[1]}")
+                for link in link_up_set:
+                    self.net.addLink(f"s{link[0]}", f"s{link[1]}", cls=TCLink)
+                    print(f"Connect s{link[0]} and s{link[1]}")
+                self.topo_lock.release()
+                cur_links = next_links
+
+            time.sleep(3)
 
 
 if __name__ == '__main__':
