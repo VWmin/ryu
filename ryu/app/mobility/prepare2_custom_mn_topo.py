@@ -38,10 +38,12 @@ def int_to_ip_address(number: int):
 
 # outside access to mininet
 class ExpExecServer:
-    def __init__(self, info, net, topo_lock):
+    def __init__(self, info, net, topo_lock, bw, delay):
         self.info = info
         self.net = net
         self.topo_lock = topo_lock
+        self.bw = bw
+        self.delay = delay
 
     @cherrypy.expose
     def exec(self):
@@ -70,12 +72,15 @@ class ExpExecServer:
         self.topo_lock.acquire()
         for link in self.net.links:
             src = link.intf1.node.name
+            dst = link.intf2.node.name
+            if src[0] == 'h' or dst[0] == 'h':
+                continue
             src_port = link.intf1.name
             src_mac = link.intf1.MAC()
-            dst = link.intf2.node.name
             dst_port = link.intf2.name
             dst_mac = link.intf2.MAC()
-            links.append((src, src_port, src_mac, dst, dst_port, dst_mac))
+            bw, delay = self.bw[(src, dst)], self.delay[(src, dst)]
+            links.append((src, src_port, src_mac, dst, dst_port, dst_mac, bw, delay))
         self.topo_lock.release()
         return pickle.dumps(links)
 
@@ -125,9 +130,27 @@ class MininetEnv:
         self.info = _get_exp_info()
         self.net = Mininet(topo=None, build=False)
         self.controllers = {}  # cid -> controller
+        self.uv_bandwidth = {}  # (u, v) -> bandwidth
+        self.uv_delay = {}  # (u, v) -> delay
         self.build_net()
         self.topo_lock = threading.Lock()
         signal.signal(signal.SIGINT, self.signal_handler)
+
+    @staticmethod
+    def rand_delay():
+        return random.randint(1, 10)
+
+    @staticmethod
+    def rand_bandwidth():
+        return random.randint(5, 10)
+
+    def attr_for_uv(self, u, v):
+        bw, delay = MininetEnv.rand_bandwidth(), MininetEnv.rand_delay()
+        self.uv_bandwidth[(u, v)] = bw
+        self.uv_bandwidth[(v, u)] = bw
+        self.uv_delay[(u, v)] = delay
+        self.uv_delay[(v, u)] = delay
+        return bw, delay
 
     def build_net(self):
         # related host
@@ -160,8 +183,8 @@ class MininetEnv:
         # Connect your switches to each other as defined in networkx graph
         for (n1, n2) in self.info.graph.edges:
             s_name_1, s_name_2 = f"s{n1}", f"s{n2}"
-            # self.net.addLink(s_name_1, s_name_2, cls=TCLink, bw=self.info.graph[n1][n2]['bandwidth'], delay=f"{self.info.graph[n1][n2]['weight']}ms")
-            self.net.addLink(s_name_1, s_name_2, cls=TCLink)
+            bw, delay = self.attr_for_uv(s_name_1, s_name_2)
+            self.net.addLink(s_name_1, s_name_2, cls=TCLink, bw=bw, delay=f"{delay}ms")
 
         info('*** Building network\n')
         self.net.build()
@@ -208,7 +231,7 @@ class MininetEnv:
     def run_exp_exec_server(self):
         print("run exp exec server")
         cherrypy.config.update({'server.socket_host': "0.0.0.0", 'server.socket_port': 9001})
-        cherrypy.quickstart(ExpExecServer(self.info, self.net, self.topo_lock))
+        cherrypy.quickstart(ExpExecServer(self.info, self.net, self.topo_lock, self.uv_bandwidth, self.uv_delay))
 
     def ping_connectivity(self):
         hosts_to_ping = random.sample(self.info.S2R[random.choice(list(self.info.S))], 2)
@@ -238,12 +261,21 @@ class MininetEnv:
                     self.net.delLinkBetween(self.net.get(f"s{link[0]}"), self.net.get(f"s{link[1]}"), allLinks=True)
                     print(f"Disconnected s{link[0]} and s{link[1]}")
                 for link in link_up_set:
-                    self.net.addLink(f"s{link[0]}", f"s{link[1]}", cls=TCLink)
-                    print(f"Connect s{link[0]} and s{link[1]}")
+                    name1, name2 = f"s{link[0]}", f"s{link[1]}"
+                    bw, delay = self.attr_for_uv(name1, name2)
+                    self.net.addLink(name1, name2, cls=TCLink, bw=bw, delay=f"{delay}ms")
+                    print(f"Connect {name1} and {name2}")
                 self.topo_lock.release()
                 cur_links = next_links
 
-            time.sleep(3)
+                print("Topo updated, notify remote...")
+                _trigger_controller()
+
+            time.sleep(15)
+
+
+def _trigger_controller():
+    requests.get("http://localhost:9002/topo_trigger")
 
 
 if __name__ == '__main__':

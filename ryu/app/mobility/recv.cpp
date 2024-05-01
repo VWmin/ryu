@@ -42,7 +42,7 @@ public:
                 std::cout << "write to file" << "\n";
                 std::cout << "ip： " << ip_record << "\n";
                 std::cout.flush();
-                f << ip_record << " " << dif << "\n";
+                f << ip_record << " " << now << " " << dif << "\n";
                 f.flush();
             }
         }

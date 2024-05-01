@@ -19,14 +19,17 @@ class MulticastInfo:
     def __init__(self, s2r):
         self.s2r = s2r
         self.group_no = 1
-        self.src_to_group_no = {}
-        self.src_to_group_ip = {}
+        self.node_to_group_no = {}
+        self.node_to_group_ip = {}
+        self.group_no_list = []
         for s in self.s2r:
             self.add_group(s)
 
     def add_group(self, src):
-        self.src_to_group_no[src] = self.group_no
-        self.src_to_group_ip[src] = f'224.0.1.{self.src_to_group_no[src]}'
+        for node in list(self.s2r[src]) + [src]:
+            self.node_to_group_no[node] = self.group_no
+            self.node_to_group_ip[node] = f'224.0.1.{self.group_no}'
+        self.group_no_list.append(self.group_no)
         self.group_no += 1
 
     @staticmethod
@@ -196,7 +199,7 @@ class GraphInfoServer:
     def update_graph(start_dt, cid_to_node, limit, cab_data, pre_g):
         time.sleep(3)
         while True:
-            start_dt = start_dt + timedelta(seconds=24)  # exp will cost 5min
+            start_dt = start_dt + timedelta(seconds=72)  # exp will cost 5min
             cur_g = read_data.query_trace(cab_data, start_dt, cid_to_node, limit)
             if not networkx.is_isomorphic(cur_g, pre_g):
                 GraphInfoServer.is_latest = True
@@ -224,7 +227,9 @@ if __name__ == "__main__":
 
     g = read_data.query_trace(cab_data, start_dt, cid_to_node, limit)
     i = GraphInfo(g)
-    plt_g(g)
+    # plt_g(g)
+    start_timestamp = datetime.now().timestamp()
+    print("travel trace start at: ", start_timestamp)
 
 
     def runserver():

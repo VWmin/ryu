@@ -5,10 +5,12 @@ import pickle
 import signal
 import time
 
+import cherrypy
 import networkx as nx
 import requests
 
 from ryu.app.distribution.route import heat_degree_matrix
+from ryu.app.distribution.route.relavence_matrix import KMB
 from ryu.base.app_manager import lookup_service_brick
 import prepare1_graph_info
 from ryu import utils
@@ -55,16 +57,12 @@ class GUIServerApp(app_manager.RyuApp):
         self.arp_port = {}
         self.datapaths = {}
 
-        self.topo_loop_thr = hub.spawn(self.topo_loop)
         self.info = _get_exp_info()
         self.g = self.info.graph
         self.dpid_to_port = {}
         self.start_exp = False
-        # self.controller_enter()
-        # self.dpid_to_port = GUIServerApp.parse_links(_get_all_links())
-        # self.update_time_info = []
-        # self.server_thr = hub.spawn(self.run_server)
-        # self.server_time = time.time()
+        self.topo_loop_thr = hub.spawn(self.run_topo_listener)
+
 
         # route
         self.is_active = True
@@ -74,41 +72,51 @@ class GUIServerApp(app_manager.RyuApp):
     def signal_handler(self, sig, frame):
         self.is_active = False
 
-    def topo_loop(self):
-        time.sleep(3)
-        while self.is_active:
-            links = _query_links()
-            g, dpid_to_port = self.parse_graph(links)
-            if nx.is_isomorphic(g, self.g):
-                time.sleep(3)
-                continue
-            self.g, self.dpid_to_port = g, dpid_to_port
-            print(self.g, self.dpid_to_port)
-            prepare1_graph_info.set_random_bw(self.g, "bandwidth", 5, 10)
-            prepare1_graph_info.add_attr_with_random_value(self.g, "weight", 1, 10)
+    def run_topo_listener(self):
+        cherrypy.config.update({'server.socket_host': "0.0.0.0", 'server.socket_port': 9002})
+        cherrypy.quickstart(self)
 
-            net = copy.deepcopy(self.g)
-            net.add_node(0)
-            instance = heat_degree_matrix.HeatDegreeModel(net, self.info.D, self.info.B, self.info.S2R)
-            self.clear_entries(self.g, self.info.multicast_info)
-            self.install_routing_trees(instance.routing_trees, self.info.multicast_info)
-            if not self.start_exp:
-                self.start_exp = True
-                _start_exp()
-            time.sleep(3)
+    @cherrypy.expose
+    def topo_trigger(self):
+        links = _query_links()
+        self.g, self.dpid_to_port, self.mac_to_port = self.parse_graph(links)
+        self.mac_to_port, self.arp_received, self.arp_port = {}, {}, {}
+        print("GRAPH UPDATED")
+
+        # net = copy.deepcopy(self.g)
+        # net.add_node(0)
+        # s2r = {}
+        # for s in self.info.S2R:
+        #     s2r[s] = set()
+        #     for r in self.info.S2R[s]:
+        #         if nx.has_path(self.g, s, r):
+        #             s2r[s].add(r)
+        # instance = heat_degree_matrix.HeatDegreeModel(net, self.info.D, self.info.B, s2r)
+        # # self.clear_entries(self.g, self.info.multicast_info)
+        # self.install_routing_trees(instance.routing_trees, self.info.multicast_info)
+        # if not self.start_exp:
+        #     self.start_exp = True
+        #     _start_exp()
 
     def parse_graph(self, links) -> (nx.Graph, dict):
         # [('s2', 's2-eth1', 'aa:42:4d:1a:60:5a', 'h2', 'h2-eth0', '02:b5:07:3d:24:de'),
         g = nx.Graph()
+        # FIXME yin wei yi zhi tu you duo shao jie dian
+        for i in range(1, 9):
+            g.add_node(i)
         dpid_to_port = {}  # (src, dst) -> src_out_port
-        for src, src_intf, src_mac, dst, dst_intf, dst_mac in links:
-            if src[0] == 's' and dst[0] == 's':
-                src, dst = int(src[1:]), int(dst[1:])
-                src_out, dst_out = int(src_intf[src_intf.find('eth') + 3:]), int(dst_intf[dst_intf.find('eth') + 3:])
-                g.add_edge(src, dst)
-                dpid_to_port[(src, dst)] = src_out
-                dpid_to_port[(dst, src)] = dst_out
-        return g, dpid_to_port
+        mac_to_port = {}  # dpid -> {dst_mac -> src_out_port}
+        for src, src_intf, src_mac, dst, dst_intf, dst_mac, bw, delay in links:
+            src, dst = int(src[1:]), int(dst[1:])
+            src_out, dst_out = int(src_intf[src_intf.find('eth') + 3:]), int(dst_intf[dst_intf.find('eth') + 3:])
+            g.add_edge(src, dst, weight=int(delay), bandwidth=int(bw))
+            dpid_to_port[(src, dst)] = src_out
+            dpid_to_port[(dst, src)] = dst_out
+            mac_to_port.setdefault(src, {})
+            mac_to_port.setdefault(dst, {})
+            mac_to_port[src][dst_mac] = src_out
+            mac_to_port[dst][src_mac] = dst_out
+        return g, dpid_to_port, mac_to_port
 
     @set_ev_cls(ofp_event.EventOFPErrorMsg, [HANDSHAKE_DISPATCHER, CONFIG_DISPATCHER, MAIN_DISPATCHER])
     def error_msg_handler(self, ev):
@@ -179,6 +187,7 @@ class GUIServerApp(app_manager.RyuApp):
         self.mac_to_port.setdefault(dpid, {})
         self.mac_to_port[dpid][arp_pkt.src_mac] = in_port
         out_port = self.mac_to_port[dpid].get(arp_pkt.dst_mac, ofproto.OFPP_FLOOD)
+        print(f"dpid-{dpid} handle arp to mac-{arp_pkt.dst_mac}, out port is {out_port}")
 
         self.arp_flow_and_forward(datapath, msg, in_port, out_port, eth_pkt)
 
@@ -249,15 +258,16 @@ class GUIServerApp(app_manager.RyuApp):
         # self.show_flow_entries(dpid)
 
     def clear_entries(self, g, info: MulticastInfo):
-        for node in g.nodes:
-            gpid = info.src_to_group_no[node]
-            self.clear_flow_and_group_entries(node, gpid)
+        print(f"info.node to group no: {info.node_to_group_no}")
+        for gpid in info.group_no_list:
+            for node in g.nodes:
+                self.clear_flow_and_group_entries(node, gpid)
 
     def install_routing_trees(self, trees, info: MulticastInfo):
         output = {}
         for src in trees:
-            group_id = info.src_to_group_no[src]
-            multicast_ip = info.src_to_group_ip[src]
+            group_id = info.node_to_group_no[src]
+            multicast_ip = info.node_to_group_ip[src]
             tree = trees[src]
 
             # install group table and flow entry for sw -> sw

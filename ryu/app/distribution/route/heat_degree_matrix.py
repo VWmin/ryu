@@ -11,7 +11,7 @@ from math import inf
 from ryu.app.distribution.route import full_pll
 
 
-# from relavence_matrix import KMB
+from ryu.app.distribution.route.relavence_matrix import KMB
 
 
 class HeatDegreeBase:
@@ -221,12 +221,10 @@ class HeatDegreeModel:
     def __routing__(self):
         t1 = time.time()
         for s in self.src2recv:
-            terminals = list(self.src2recv[s]) + [s]
-            # g = copy.deepcopy(self.g)
-            # g.remove_node(0)
-            g = self._heat_base.heat_graph(s)
-            ts = steinertree.steiner_tree(g, terminals)
-            # ts = KMB(self.g, list(self.src2recv[s]) + [s], weight=lambda u, v, d: self._heat_base.get_heat_degree_ij(s, u, v))
+            # terminals = list(self.src2recv[s]) + [s]
+            # g = self._heat_base.heat_graph(s)
+            # ts = steinertree.steiner_tree(g, terminals)
+            ts = KMB(self.g, list(self.src2recv[s]) + [s], weight=lambda u, v, d: self._heat_base.get_heat_degree_ij(s, u, v))
             self.routing_trees[s] = nx.DiGraph()
             convert_routing_tree_to_digraph(ts, self.routing_trees[s], s, None)
 

@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
     PacketSender sender;
 
     // 每轮的发包数
-    const int MAX_NUM = 10;
+    const int MAX_NUM = 320;
 
     auto src_ip = info.ip_addr.to_string();
     auto src_mac = info.hw_addr.to_string();
@@ -128,9 +128,7 @@ int main(int argc, char **argv) {
         auto packet_to_send = getEthernetII(dst_ip, dst_mac, src_ip, src_mac);
         sender.send(packet_to_send, dev);
         std::cout << "send packet number "<< send_num << "\n";
-//        usleep(500);
-        usleep(800000);
-//        sleep(1);
+        sleep(1);
     }
 
     return 0;
