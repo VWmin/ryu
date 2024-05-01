@@ -263,7 +263,11 @@ class MininetEnv:
                 for link in link_up_set:
                     name1, name2 = f"s{link[0]}", f"s{link[1]}"
                     bw, delay = self.attr_for_uv(name1, name2)
-                    self.net.addLink(name1, name2, cls=TCLink, bw=bw, delay=f"{delay}ms")
+                    real_link = self.net.addLink(name1, name2, cls=TCLink, bw=bw, delay=f"{delay}ms")
+                    s1 = self.net.getNodeByName(name1)
+                    s2 = self.net.getNodeByName(name2)
+                    s1.attach(real_link.intf1.name)
+                    s2.attach(real_link.intf2.name)
                     print(f"Connect {name1} and {name2}")
                 self.topo_lock.release()
                 cur_links = next_links
@@ -271,7 +275,7 @@ class MininetEnv:
                 print("Topo updated, notify remote...")
                 _trigger_controller()
 
-            time.sleep(15)
+            time.sleep(60)
 
 
 def _trigger_controller():

@@ -3,6 +3,7 @@ import logging
 import os
 import pickle
 import signal
+import threading
 import time
 
 import cherrypy
@@ -63,14 +64,7 @@ class GUIServerApp(app_manager.RyuApp):
         self.start_exp = False
         self.topo_loop_thr = hub.spawn(self.run_topo_listener)
 
-
-        # route
-        self.is_active = True
-
-        signal.signal(signal.SIGINT, self.signal_handler)
-
-    def signal_handler(self, sig, frame):
-        self.is_active = False
+        self.lock = threading.Lock()
 
     def run_topo_listener(self):
         cherrypy.config.update({'server.socket_host': "0.0.0.0", 'server.socket_port': 9002})
@@ -79,24 +73,26 @@ class GUIServerApp(app_manager.RyuApp):
     @cherrypy.expose
     def topo_trigger(self):
         links = _query_links()
-        self.g, self.dpid_to_port, self.mac_to_port = self.parse_graph(links)
+        self.lock.acquire()
+        self.g, self.dpid_to_port = self.parse_graph(links)
         self.mac_to_port, self.arp_received, self.arp_port = {}, {}, {}
         print("GRAPH UPDATED")
 
-        # net = copy.deepcopy(self.g)
-        # net.add_node(0)
-        # s2r = {}
-        # for s in self.info.S2R:
-        #     s2r[s] = set()
-        #     for r in self.info.S2R[s]:
-        #         if nx.has_path(self.g, s, r):
-        #             s2r[s].add(r)
-        # instance = heat_degree_matrix.HeatDegreeModel(net, self.info.D, self.info.B, s2r)
-        # # self.clear_entries(self.g, self.info.multicast_info)
-        # self.install_routing_trees(instance.routing_trees, self.info.multicast_info)
-        # if not self.start_exp:
-        #     self.start_exp = True
-        #     _start_exp()
+        net = copy.deepcopy(self.g)
+        net.add_node(0)
+        s2r = {}
+        for s in self.info.S2R:
+            s2r[s] = set()
+            for r in self.info.S2R[s]:
+                if nx.has_path(self.g, s, r):
+                    s2r[s].add(r)
+        instance = heat_degree_matrix.HeatDegreeModel(net, self.info.D, self.info.B, s2r)
+        self.clear_entries(self.g, self.info.multicast_info)
+        self.install_routing_trees(instance.routing_trees, self.info.multicast_info)
+        if not self.start_exp:
+            self.start_exp = True
+            _start_exp()
+        self.lock.release()
 
     def parse_graph(self, links) -> (nx.Graph, dict):
         # [('s2', 's2-eth1', 'aa:42:4d:1a:60:5a', 'h2', 'h2-eth0', '02:b5:07:3d:24:de'),
@@ -105,18 +101,18 @@ class GUIServerApp(app_manager.RyuApp):
         for i in range(1, 9):
             g.add_node(i)
         dpid_to_port = {}  # (src, dst) -> src_out_port
-        mac_to_port = {}  # dpid -> {dst_mac -> src_out_port}
+        # mac_to_port = {}  # dpid -> {dst_mac -> src_out_port}
         for src, src_intf, src_mac, dst, dst_intf, dst_mac, bw, delay in links:
             src, dst = int(src[1:]), int(dst[1:])
             src_out, dst_out = int(src_intf[src_intf.find('eth') + 3:]), int(dst_intf[dst_intf.find('eth') + 3:])
             g.add_edge(src, dst, weight=int(delay), bandwidth=int(bw))
             dpid_to_port[(src, dst)] = src_out
             dpid_to_port[(dst, src)] = dst_out
-            mac_to_port.setdefault(src, {})
-            mac_to_port.setdefault(dst, {})
-            mac_to_port[src][dst_mac] = src_out
-            mac_to_port[dst][src_mac] = dst_out
-        return g, dpid_to_port, mac_to_port
+            # mac_to_port.setdefault(src, {})
+            # mac_to_port.setdefault(dst, {})
+            # mac_to_port[src][dst_mac] = src_out
+            # mac_to_port[dst][src_mac] = dst_out
+        return g, dpid_to_port
 
     @set_ev_cls(ofp_event.EventOFPErrorMsg, [HANDSHAKE_DISPATCHER, CONFIG_DISPATCHER, MAIN_DISPATCHER])
     def error_msg_handler(self, ev):
@@ -177,6 +173,7 @@ class GUIServerApp(app_manager.RyuApp):
         ofproto = datapath.ofproto
         arp_key = (dpid, arp_pkt.src_mac, arp_pkt.dst_ip)
 
+        self.lock.acquire()
         self.arp_received.setdefault(arp_key, False)
         if not self.arp_received[arp_key]:
             self.arp_received[arp_key] = True
@@ -188,6 +185,7 @@ class GUIServerApp(app_manager.RyuApp):
         self.mac_to_port[dpid][arp_pkt.src_mac] = in_port
         out_port = self.mac_to_port[dpid].get(arp_pkt.dst_mac, ofproto.OFPP_FLOOD)
         print(f"dpid-{dpid} handle arp to mac-{arp_pkt.dst_mac}, out port is {out_port}")
+        self.lock.release()
 
         self.arp_flow_and_forward(datapath, msg, in_port, out_port, eth_pkt)
 
@@ -324,7 +322,3 @@ class GUIServerApp(app_manager.RyuApp):
         match = parser.OFPMatch(eth_type=0x800, ipv4_dst=multicast_ip)
         actions = [parser.OFPActionOutput(1)]
         self.add_flow(datapath, 1, match, actions)
-
-
-# app_manager.require_app('ryu.app.rest_topology')
-app_manager.require_app('ryu.app.ofctl_rest')
